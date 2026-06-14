@@ -18,6 +18,10 @@ export const ComponentType = {
   Inputs: 16,
   Container: 17,
   Label: 18,
+  FileUpload: 19,
+  RadioGroup: 21,
+  CheckboxGroup: 22,
+  Checkbox: 23,
 };
 
 export class ComponentBuilder {
@@ -135,6 +139,30 @@ export class ComponentBuilder {
     if (id !== null) thumbnail.id = id;
 
     return thumbnail;
+  }
+
+  static createMediaGallery({ items = [], id = null }) {
+    const gallery = {
+      type: ComponentType.MediaGallery,
+      items: items.map(item => {
+        const mediaItem = { media: item.media };
+        if (item.description) mediaItem.description = item.description;
+        if (item.spoiler) mediaItem.spoiler = true;
+        return mediaItem;
+      }),
+    };
+    if (id !== null) gallery.id = id;
+    return gallery;
+  }
+
+  static createFile({ file, spoiler = false, id = null }) {
+    const fileComp = {
+      type: ComponentType.File,
+      file: file,
+    };
+    if (spoiler) fileComp.spoiler = true;
+    if (id !== null) fileComp.id = id;
+    return fileComp;
   }
 
   static buildV2Message({ titleTextDisplay, description, markdownContent, textDisplays = [], buttons = [], separator = false, components = [], sections = [], accentColor = 0x5865F2 }) {
