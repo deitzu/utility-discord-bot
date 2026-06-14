@@ -23,6 +23,7 @@ export default {
     try {
       if (style === 'v2') {
         // New dual-message V2 approach
+        interaction.client.embedCreatorManager.getOrCreateState(user.id, targetChannel.id);
         const result = await interaction.client.embedCreatorManager.sendPreviewAndControls(user.id, targetChannel, user);
         
         if (!result.success) {
