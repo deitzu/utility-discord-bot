@@ -18,7 +18,7 @@ export default {
   async execute(interaction) {
     const targetChannel = interaction.options.getChannel('channel');
     const user = interaction.user;
-    const style = getMessageStyle(interaction.client.config, 'embedCreator');
+    const style = getMessageStyle(interaction.client.embedCreatorManager.config, 'embedCreator');
 
     try {
       if (style === 'v2') {
