@@ -318,36 +318,23 @@ const buttons = [
       const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
       const targetChannel = interaction.client.channels.cache.get(state.targetChannelId);
 
-      await interaction.deferUpdate();
-      await interaction.followUp({
+      const { flags, ...rest } = message;
+      await interaction.update({
         content: `### Embed Creator\nYou are creating a message for ${targetChannel || 'unknown channel'}.\nUse the buttons below to customize your message.`,
-        ephemeral: true,
-        ...message
+        ...rest
       });
-
-      try {
-        await interaction.message.delete();
-      } catch (error) {
-        logger.error('Failed to delete original preview message on reset:', error);
-      }
     }
   },
   {
     customId: 'embed_creator_cancel',
     async execute(interaction) {
       interaction.client.embedCreatorManager.clearState(interaction.user.id);
-      
-      await interaction.deferUpdate();
-      await interaction.followUp({
-        content: '❌ Embed creation cancelled.',
-        ephemeral: true
-      });
 
-      try {
-        await interaction.message.delete();
-      } catch (error) {
-        logger.error('Failed to delete original preview message on cancel:', error);
-      }
+      await interaction.update({
+        content: '❌ Embed creation cancelled.',
+        embeds: [],
+        components: []
+      });
     }
   }
 ];
