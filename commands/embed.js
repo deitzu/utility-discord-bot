@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { createLogger } from '../utils/Logger.js';
+import { getMessageStyle } from '../utils/ConfigLoader.js';
 
 const logger = createLogger('EmbedCommand');
 
@@ -17,10 +18,29 @@ export default {
   async execute(interaction) {
     const targetChannel = interaction.options.getChannel('channel');
     const user = interaction.user;
+    const style = getMessageStyle(interaction.client.config, 'embedCreator');
 
     try {
-      // Check if user has DMs enabled
-      try {
+      if (style === 'v2') {
+        // New dual-message V2 approach
+        const result = await interaction.client.embedCreatorManager.sendPreviewAndControls(user.id, targetChannel, user);
+        
+        if (!result.success) {
+          await interaction.reply({
+            content: result.error === 'Failed to build V2 messages' 
+              ? 'Failed to create embed preview. Please try again.'
+              : 'I couldn\'t send you a DM. Please make sure your DMs are open!',
+            ephemeral: true
+          });
+          return;
+        }
+
+        await interaction.reply({
+          content: 'I\'ve sent you a DM to start creating your embed!',
+          ephemeral: true
+        });
+      } else {
+        // Legacy embed approach (unchanged)
         const state = interaction.client.embedCreatorManager.getOrCreateState(user.id, targetChannel.id);
         const message = interaction.client.embedCreatorManager.buildMessage(user.id, { includeComponents: true, targetChannel });
 
@@ -30,12 +50,6 @@ export default {
 
         await interaction.reply({
           content: 'I\'ve sent you a DM to start creating your embed!',
-          ephemeral: true
-        });
-      } catch (error) {
-        logger.error(`Failed to send DM to user ${user.id}:`, error);
-        await interaction.reply({
-          content: 'I couldn\'t send you a DM. Please make sure your DMs are open!',
           ephemeral: true
         });
       }

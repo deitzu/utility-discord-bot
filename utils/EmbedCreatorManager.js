@@ -32,7 +32,8 @@ export class EmbedCreatorManager {
           buttons: [],
           separators: []
         },
-        previewMessageId: null
+        previewMessageId: null,
+        controlsMessageId: null
       });
     } else if (channelId) {
       const state = this.states.get(userId);
@@ -125,6 +126,146 @@ export class EmbedCreatorManager {
     this.states.delete(userId);
   }
 
+  buildPreviewMessage(userId) {
+    const style = getMessageStyle(this.config, 'embedCreator');
+    const state = this.states.get(userId);
+    if (!state || style !== 'v2') return null;
+
+    const textDisplays = state.v2.textDisplays.length > 0 ? state.v2.textDisplays : ['*(No Content)*'];
+
+    return ComponentBuilder.buildV2Message({
+      textDisplays,
+      buttons: state.v2.buttons.map(b => ComponentBuilder.createButton({
+        label: b.label,
+        customId: b.url ? undefined : (b.customId || `v2_btn_${Math.random().toString(36).substr(2, 9)}`),
+        style: b.style || ButtonStyle.Primary,
+        url: b.url
+      })),
+      separator: state.v2.separators,
+      accentColor: this._hexToDecimal(state.embed.color)
+    });
+  }
+
+  buildControlsMessage(userId, targetChannel) {
+    const style = getMessageStyle(this.config, 'embedCreator');
+    const state = this.states.get(userId);
+    if (!state || style !== 'v2') return null;
+
+    const sepCount = state.v2.separators?.length || 0;
+    let separatorList = '';
+    if (sepCount > 0) {
+      separatorList = `\n**Separators after indices:** ${state.v2.separators.join(', ')}`;
+    }
+
+    const row1 = ComponentBuilder.createActionRow([
+      ComponentBuilder.createButton({ customId: 'embed_creator_textdisplay_add', label: 'Add Text', style: ButtonStyle.Secondary }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_textdisplay_remove', label: 'Remove Last', style: ButtonStyle.Secondary }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_separator_add', label: 'Add Separator', style: ButtonStyle.Secondary }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_markdown_line', label: `Seps (${sepCount})`, style: ButtonStyle.Secondary }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_button_add', label: 'Add Button', style: ButtonStyle.Secondary })
+    ]);
+
+    const row2 = ComponentBuilder.createActionRow([
+      ComponentBuilder.createButton({ customId: 'embed_creator_send', label: 'Send Message', style: ButtonStyle.Success }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_reset', label: 'Reset', style: ButtonStyle.Danger }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_cancel', label: 'Cancel', style: ButtonStyle.Danger })
+    ]);
+
+    return ComponentBuilder.buildV2Message({
+      textDisplays: [
+        `### Embed Creator\nYou are creating a message for ${targetChannel || 'unknown channel'}.\nUse the buttons below to customize your message.${separatorList}`
+      ],
+      components: [row1, row2],
+      accentColor: this._hexToDecimal(state.embed.color)
+    });
+  }
+
+  async sendPreviewAndControls(userId, targetChannel, user) {
+    const previewMessage = this.buildPreviewMessage(userId);
+    const controlsMessage = this.buildControlsMessage(userId, targetChannel);
+    
+    if (!previewMessage || !controlsMessage) {
+      return { success: false, error: 'Failed to build V2 messages' };
+    }
+
+    try {
+      const dmChannel = user.dmChannel || await user.createDM();
+      
+      const previewMsg = await dmChannel.send(previewMessage);
+      
+      const controlsMsg = await dmChannel.send(controlsMessage);
+
+      const state = this.states.get(userId);
+      if (state) {
+        state.previewMessageId = previewMsg.id;
+        state.controlsMessageId = controlsMsg.id;
+      }
+
+      return { success: true, previewMsg, controlsMsg };
+    } catch (error) {
+      logger.error('Failed to send preview/controls DM:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async updatePreview(userId) {
+    const state = this.states.get(userId);
+    if (!state || !state.previewMessageId) return { success: false, error: 'No preview message to update' };
+
+    const previewMessage = this.buildPreviewMessage(userId);
+    if (!previewMessage) return { success: false, error: 'Failed to build preview message' };
+
+    try {
+      const dmChannel = this.client.users.cache.get(userId)?.dmChannel || await this.client.users.fetch(userId).then(u => u.createDM());
+      
+      await this.client.apiHelper.editMessage(dmChannel.id, state.previewMessageId, previewMessage);
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to update preview message:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async updateControls(userId, targetChannel) {
+    const state = this.states.get(userId);
+    if (!state || !state.controlsMessageId) return { success: false, error: 'No controls message to update' };
+
+    const controlsMessage = this.buildControlsMessage(userId, targetChannel);
+    if (!controlsMessage) return { success: false, error: 'Failed to build controls message' };
+
+    try {
+      const dmChannel = this.client.users.cache.get(userId)?.dmChannel || await this.client.users.fetch(userId).then(u => u.createDM());
+      
+      await this.client.apiHelper.editMessage(dmChannel.id, state.controlsMessageId, controlsMessage);
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to update controls message:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async deletePreviewAndControls(userId, user) {
+    const state = this.states.get(userId);
+    if (!state) return { success: true };
+
+    const dmChannel = user?.dmChannel || (this.client.users.cache.get(userId)?.dmChannel) || await this.client.users.fetch(userId).then(u => u.createDM()).catch(() => null);
+    
+    if (!dmChannel) return { success: true };
+
+    try {
+      if (state.previewMessageId) {
+        await this.client.apiHelper.deleteMessage(dmChannel.id, state.previewMessageId);
+      }
+      if (state.controlsMessageId) {
+        await this.client.apiHelper.deleteMessage(dmChannel.id, state.controlsMessageId);
+      }
+      return { success: true };
+    } catch (error) {
+      logger.error('Failed to delete preview/controls messages:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   /**
    * Helper to convert hex color string to decimal number
    * @param {string|number} hex 
@@ -168,7 +309,7 @@ export class EmbedCreatorManager {
     return embed;
   }
 
-  buildMessage(userId, { includeComponents = false, targetChannel = null } = {}) {
+  buildMessage(userId) {
     const style = getMessageStyle(this.config, 'embedCreator');
     const state = this.states.get(userId);
     if (!state) return null;
@@ -176,10 +317,6 @@ export class EmbedCreatorManager {
     let message;
     if (style === 'v2') {
       const textDisplays = state.v2.textDisplays.length > 0 ? state.v2.textDisplays : ['*(No Content)*'];
-      
-      if (includeComponents && targetChannel) {
-        textDisplays.unshift(`### Embed Creator\nYou are creating a message for ${targetChannel}.\nUse the buttons below to customize your message.`);
-      }
 
       message = ComponentBuilder.buildV2Message({
         textDisplays,
@@ -194,13 +331,6 @@ export class EmbedCreatorManager {
       });
     } else {
       message = { embeds: [this.buildEmbed(userId)] };
-    }
-
-    if (includeComponents) {
-      const creatorComponents = this.createComponents(style, state);
-      if (message.components) {
-        message.components[0].components.push(...creatorComponents.map(c => c.toJSON ? c.toJSON() : c));
-      }
     }
 
     return message;

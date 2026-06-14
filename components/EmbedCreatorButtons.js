@@ -8,16 +8,8 @@ async function updatePreview(interaction) {
   const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
   const targetChannel = interaction.client.channels.cache.get(state.targetChannelId);
 
-  let separatorList = '';
-  if (state.v2.separators && state.v2.separators.length > 0) {
-    separatorList = `\n**Separators after indices:** ${state.v2.separators.join(', ')}`;
-  }
-
-  const message = interaction.client.embedCreatorManager.buildMessage(userId, { includeComponents: true, targetChannel: targetChannel || 'unknown channel' });
-  logger.info(`updatePreview: buttons in state=${state.v2.buttons.length}, message has components=${!!message.components}`);
-  
-  const { flags, ...rest } = message;
-  await interaction.update(rest);
+  await interaction.client.embedCreatorManager.updatePreview(userId);
+  await interaction.client.embedCreatorManager.updateControls(userId, targetChannel || 'unknown channel');
 }
 
 const buttons = [
@@ -297,6 +289,7 @@ const buttons = [
       
       try {
         await targetChannel.send(message);
+        await interaction.client.embedCreatorManager.deletePreviewAndControls(userId, interaction.user);
         interaction.client.embedCreatorManager.clearState(userId);
         await interaction.update({
           content: `✅ Message successfully sent to ${targetChannel}!`,
@@ -317,21 +310,16 @@ const buttons = [
       const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
       const targetChannel = interaction.client.channels.cache.get(state.targetChannelId);
 
-      const message = interaction.client.embedCreatorManager.buildMessage(userId, { includeComponents: true, targetChannel: targetChannel || 'unknown channel' });
-      const { flags, ...rest } = message;
-      await interaction.update(rest);
+      await interaction.client.embedCreatorManager.updatePreview(userId);
+      await interaction.client.embedCreatorManager.updateControls(userId, targetChannel || 'unknown channel');
     }
   },
   {
     customId: 'embed_creator_cancel',
     async execute(interaction) {
-      interaction.client.embedCreatorManager.clearState(interaction.user.id);
-
-      await interaction.update({
-        content: '❌ Embed creation cancelled.',
-        embeds: [],
-        components: []
-      });
+      const userId = interaction.user.id;
+      interaction.client.embedCreatorManager.clearState(userId);
+      await interaction.client.embedCreatorManager.deletePreviewAndControls(userId, interaction.user);
     }
   }
 ];

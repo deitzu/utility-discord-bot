@@ -4,19 +4,7 @@ const logger = createLogger('EmbedCreatorModal');
 
 async function updatePreview(interaction) {
   const userId = interaction.user.id;
-  const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
-  const targetChannel = interaction.client.channels.cache.get(state.targetChannelId);
-
-  let separatorList = '';
-  if (state.v2.separators && state.v2.separators.length > 0) {
-    separatorList = `\n**Separators after indices:** ${state.v2.separators.join(', ')}`;
-  }
-
-  const message = interaction.client.embedCreatorManager.buildMessage(userId, { includeComponents: true, targetChannel: targetChannel || 'unknown channel' });
-  logger.info(`updatePreview: buttons in state=${state.v2.buttons.length}, message has components=${!!message.components}`);
-  
-  const { flags, ...rest } = message;
-  await interaction.update(rest);
+  await interaction.client.embedCreatorManager.updatePreview(userId);
 }
 
 const modals = [
