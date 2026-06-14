@@ -168,19 +168,26 @@ export class EmbedCreatorManager {
     return embed;
   }
 
-  buildMessage(userId, { includeComponents = false } = {}) {
+  buildMessage(userId, { includeComponents = false, targetChannel = null } = {}) {
     const style = getMessageStyle(this.config, 'embedCreator');
     const state = this.states.get(userId);
     if (!state) return null;
 
     let message;
     if (style === 'v2') {
+      const textDisplays = state.v2.textDisplays.length > 0 ? state.v2.textDisplays : ['*(No Content)*'];
+      
+      if (includeComponents && targetChannel) {
+        textDisplays.unshift(`### Embed Creator\nYou are creating a message for ${targetChannel}.\nUse the buttons below to customize your message.`);
+      }
+
       message = ComponentBuilder.buildV2Message({
-        textDisplays: state.v2.textDisplays.length > 0 ? state.v2.textDisplays : ['*(No Content)*'],
+        textDisplays,
         buttons: state.v2.buttons.map(b => ComponentBuilder.createButton({
           label: b.label,
-          customId: b.customId || `v2_btn_${Math.random().toString(36).substr(2, 9)}`,
-          style: ButtonStyle.Primary
+          customId: b.url ? undefined : (b.customId || `v2_btn_${Math.random().toString(36).substr(2, 9)}`),
+          style: b.style || ButtonStyle.Primary,
+          url: b.url
         })),
         separator: state.v2.separators,
         accentColor: this._hexToDecimal(state.embed.color)
@@ -192,9 +199,7 @@ export class EmbedCreatorManager {
     if (includeComponents) {
       const creatorComponents = this.createComponents(style, state);
       if (message.components) {
-        message.components.push(...creatorComponents);
-      } else {
-        message.components = creatorComponents;
+        message.components[0].components.push(...creatorComponents.map(c => c.toJSON ? c.toJSON() : c));
       }
     }
 

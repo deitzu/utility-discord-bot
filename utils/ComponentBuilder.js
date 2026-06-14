@@ -21,7 +21,7 @@ export const ComponentType = {
 };
 
 export class ComponentBuilder {
-  static createContainer({ description, components = [], accentColor = null }) {
+  static createContainer({ description, components = [], accentColor = null, spoiler = false, id = null }) {
     const container = {
       type: ComponentType.Container,
       components: components,
@@ -29,45 +29,85 @@ export class ComponentBuilder {
 
     if (description) container.description = description;
     if (accentColor) container.accent_color = accentColor;
+    if (spoiler) container.spoiler = true;
+    if (id !== null) container.id = id;
 
     return container;
   }
 
-  static createSection({ components = [] }) {
-    return {
+  static createSection({ components = [], accessory = null, id = null }) {
+    const section = {
       type: ComponentType.Section,
       components: components,
     };
+
+    if (accessory) section.accessory = accessory;
+    if (id !== null) section.id = id;
+
+    return section;
   }
 
-  static createTextDisplay(content) {
+  static createSectionWithButtonAccessory(textDisplays, button, id = null) {
+    return this.createSection({
+      components: textDisplays.map(t => this.createTextDisplay(t)),
+      accessory: button,
+      id
+    });
+  }
+
+  static createSectionWithThumbnailAccessory(textDisplays, thumbnail, id = null) {
+    return this.createSection({
+      components: textDisplays.map(t => this.createTextDisplay(t)),
+      accessory: thumbnail,
+      id
+    });
+  }
+
+  static createTextDisplay(content, id = null) {
     return {
       type: ComponentType.TextDisplay,
       content: content,
+      ...(id !== null && { id })
     };
   }
 
-  static createLabel(content) {
-    return {
+  static createLabel(content, description = null, component = null, id = null) {
+    const label = {
       type: ComponentType.Label,
       content: content,
     };
+
+    if (description) label.description = description;
+    if (component) label.component = component;
+    if (id !== null) label.id = id;
+
+    return label;
   }
 
-  static createSeparator() {
-    return {
+  static createSeparator({ spacing = 1, divider = true, id = null } = {}) {
+    const separator = {
       type: ComponentType.Separator,
     };
+
+    if (spacing === 1 || spacing === 2) separator.spacing = spacing;
+    if (divider === false) separator.divider = false;
+    if (id !== null) separator.id = id;
+
+    return separator;
   }
 
-  static createActionRow(components = []) {
-    return {
+  static createActionRow(components = [], id = null) {
+    const row = {
       type: ComponentType.ActionRow,
       components: components,
     };
+
+    if (id !== null) row.id = id;
+
+    return row;
   }
 
-  static createButton({ customId, label, style, emoji, url, disabled }) {
+  static createButton({ customId, label, style, emoji, url, disabled, id = null }) {
     const button = {
       type: ComponentType.Button,
       style: style,
@@ -78,25 +118,35 @@ export class ComponentBuilder {
     if (customId) button.custom_id = customId;
     if (emoji) button.emoji = emoji;
     if (url) button.url = url;
+    if (id !== null) button.id = id;
 
     return button;
   }
 
-  static buildV2Message({ titleTextDisplay, description, markdownContent, textDisplays = [], buttons = [], separator = false, components = [], accentColor = 0x5865F2, content = null }) {
+  static createThumbnail({ src, description = null, spoiler = false, size = null, id = null }) {
+    const thumbnail = {
+      type: ComponentType.Thumbnail,
+      media: { url: src },
+    };
+
+    if (description) thumbnail.description = description;
+    if (spoiler) thumbnail.spoiler = true;
+    if (size) thumbnail.size = size;
+    if (id !== null) thumbnail.id = id;
+
+    return thumbnail;
+  }
+
+  static buildV2Message({ titleTextDisplay, description, markdownContent, textDisplays = [], buttons = [], separator = false, components = [], sections = [], accentColor = 0x5865F2 }) {
     const containerComponents = [];
     
-    // Support for both boolean and array of indices
-    // If it's an array, we use it for specific placements and disable automatic separator
-    // If it's a boolean, we use it for automatic separator logic
     const separatorIndices = Array.isArray(separator) ? separator : null;
     const isSeparatorEnabled = separator === true;
 
-    // Add title as text display if provided
     if (titleTextDisplay) {
       containerComponents.push(this.createTextDisplay("# " + titleTextDisplay));
     }
 
-    // Add text displays from the new array
     if (Array.isArray(textDisplays)) {
       textDisplays.forEach((text, index) => {
         if (text) {
@@ -108,15 +158,12 @@ export class ComponentBuilder {
       });
     }
 
-    // Add legacy text content
     if (markdownContent) {
       containerComponents.push(this.createTextDisplay(markdownContent));
     }
 
-    // Add separator if requested or if we have a title/markdown and content following it
-    // We only do the automatic separator if separator was not provided as an array
     const hasTitle = titleTextDisplay || markdownContent || (textDisplays.length > 0 && (separatorIndices === null || !separatorIndices.includes(textDisplays.length - 1)));
-    const hasContent = description || components.length > 0 || buttons.length > 0;
+    const hasContent = description || components.length > 0 || buttons.length > 0 || sections.length > 0;
     if (isSeparatorEnabled || (separatorIndices === null && hasTitle && hasContent)) {
       containerComponents.push(this.createSeparator());
     }
@@ -125,7 +172,12 @@ export class ComponentBuilder {
       containerComponents.push(this.createTextDisplay(description));
     }
 
-    // Handle components (legacy and new buttons)
+    if (Array.isArray(sections)) {
+      sections.forEach(section => {
+        containerComponents.push(section);
+      });
+    }
+
     const allButtons = [...buttons];
     const otherComponents = [];
 
@@ -149,12 +201,11 @@ export class ComponentBuilder {
 
     const container = this.createContainer({
       accentColor: accentColor,
-      components: containerComponents,
+      components: containerComponents
     });
 
     return {
-      content: content,
-      flags: 32768, // Required flag for v2 components
+      flags: 32768,
       components: [container]
     };
   }

@@ -4,7 +4,6 @@ const logger = createLogger('EmbedCreatorModal');
 
 async function updatePreview(interaction) {
   const userId = interaction.user.id;
-  const message = interaction.client.embedCreatorManager.buildMessage(userId, { includeComponents: true });
   const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
   const targetChannel = interaction.client.channels.cache.get(state.targetChannelId);
 
@@ -13,10 +12,11 @@ async function updatePreview(interaction) {
     separatorList = `\n**Separators after indices:** ${state.v2.separators.join(', ')}`;
   }
 
-  await interaction.update({
-    content: `### Embed Creator\nYou are creating a message for ${targetChannel || 'unknown channel'}.\nUse the buttons below to customize your message.${separatorList}`,
-    ...message
-  });
+  const message = interaction.client.embedCreatorManager.buildMessage(userId, { includeComponents: true, targetChannel: targetChannel || 'unknown channel' });
+  logger.info(`updatePreview: buttons in state=${state.v2.buttons.length}, message has components=${!!message.components}`);
+  
+  const { flags, ...rest } = message;
+  await interaction.update(rest);
 }
 
 const modals = [
