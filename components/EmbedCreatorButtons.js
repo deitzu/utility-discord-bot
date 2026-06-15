@@ -466,7 +466,7 @@ const buttons = [
         new ActionRowBuilder().addComponents(spoiler1Input, url2Input),
         new ActionRowBuilder().addComponents(desc2Input, spoiler2Input, url3Input),
         new ActionRowBuilder().addComponents(desc3Input, spoiler3Input, url4Input),
-        new ActionRowBuilder().addComponents(desc4Input, spoiler4Input, url5Input, desc5Input)
+        new ActionRowBuilder().addComponents(desc4Input, spoiler4Input, url5Input, desc5Input, spoiler5Input)
       );
       await interaction.showModal(modal);
     }

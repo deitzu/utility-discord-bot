@@ -171,7 +171,9 @@ export class ComponentBuilder {
     
     const getNextId = () => componentIdCounter++;
     
-    const separatorIndices = Array.isArray(separator) ? separator : null;
+    const separatorIndices = Array.isArray(separator) 
+      ? separator.map(s => typeof s === 'number' ? s : s.index).filter(v => typeof v === 'number')
+      : null;
     const isSeparatorEnabled = separator === true;
 
     if (titleTextDisplay) {
@@ -183,7 +185,7 @@ export class ComponentBuilder {
         if (text) {
           containerComponents.push(this.createTextDisplay(text, getNextId()));
           if (separatorIndices && separatorIndices.includes(index)) {
-            const sep = Array.isArray(separator) ? separator.find(s => s.index === index || (typeof s === 'number' && s === index)) : null;
+            const sep = Array.isArray(separator) ? separator.find(s => (typeof s === 'object' && s.index === index) || (typeof s === 'number' && s === index)) : null;
             containerComponents.push(this.createSeparator(sep ? { spacing: sep.spacing, divider: sep.divider } : {}, getNextId()));
           }
         }
