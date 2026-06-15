@@ -197,7 +197,7 @@ const modals = [
     async execute(interaction) {
       const items = [];
 
-      // Image 1: url1 + desc1
+      // Image 1: url1 + desc1 + spoiler1
       const url1 = interaction.fields.getTextInputValue('gallery_url1');
       const desc1 = interaction.fields.getTextInputValue('gallery_desc1');
       const spoiler1 = interaction.fields.getTextInputValue('gallery_spoiler1');
@@ -205,7 +205,7 @@ const modals = [
         items.push({ media: { url: url1 }, description: desc1 || undefined, spoiler: spoiler1 === 'true' });
       }
 
-      // Image 2: spoiler1 + url2
+      // Image 2: spoiler1 + url2 + desc2 + spoiler2
       const url2 = interaction.fields.getTextInputValue('gallery_url2');
       const desc2 = interaction.fields.getTextInputValue('gallery_desc2');
       const spoiler2 = interaction.fields.getTextInputValue('gallery_spoiler2');
@@ -213,28 +213,12 @@ const modals = [
         items.push({ media: { url: url2 }, description: desc2 || undefined, spoiler: spoiler2 === 'true' });
       }
 
-      // Image 3: desc2 + spoiler2 + url3
+      // Image 3: url3 + desc3 + spoiler3
       const url3 = interaction.fields.getTextInputValue('gallery_url3');
       const desc3 = interaction.fields.getTextInputValue('gallery_desc3');
       const spoiler3 = interaction.fields.getTextInputValue('gallery_spoiler3');
       if (url3) {
         items.push({ media: { url: url3 }, description: desc3 || undefined, spoiler: spoiler3 === 'true' });
-      }
-
-      // Image 4: desc3 + spoiler3 + url4
-      const url4 = interaction.fields.getTextInputValue('gallery_url4');
-      const desc4 = interaction.fields.getTextInputValue('gallery_desc4');
-      const spoiler4 = interaction.fields.getTextInputValue('gallery_spoiler4');
-      if (url4) {
-        items.push({ media: { url: url4 }, description: desc4 || undefined, spoiler: spoiler4 === 'true' });
-      }
-
-      // Image 5: desc4 + spoiler4 + url5 + desc5 + spoiler5
-      const url5 = interaction.fields.getTextInputValue('gallery_url5');
-      const desc5 = interaction.fields.getTextInputValue('gallery_desc5');
-      const spoiler5 = interaction.fields.getTextInputValue('gallery_spoiler5');
-      if (url5) {
-        items.push({ media: { url: url5 }, description: desc5 || undefined, spoiler: spoiler5 === 'true' });
       }
 
       if (items.length > 0) {

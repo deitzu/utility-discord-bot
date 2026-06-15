@@ -206,7 +206,7 @@ const buttons = [
 
       const styleInput = new TextInputBuilder()
         .setCustomId('button_style')
-        .setLabel('Button Style (1=Primary, 2=Secondary, 3=Success, 4=Danger, 5=Link)')
+        .setLabel('Style 1-5: P/S/S/D/Link')
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
         .setPlaceholder('1');
@@ -312,7 +312,7 @@ const buttons = [
 
       const thumbnailSizeInput = new TextInputBuilder()
         .setCustomId('section_thumbnail_size')
-        .setLabel('Thumbnail Size (40, 64, 80, 100, 128, 256, 512)')
+        .setLabel('Size: 40/64/80/100/128/256/512')
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
         .setPlaceholder('64');
@@ -349,9 +349,9 @@ const buttons = [
     async execute(interaction) {
       const modal = new ModalBuilder()
         .setCustomId('embed_creator_modal_gallery')
-        .setTitle('Add Media Gallery (5 images max)');
+        .setTitle('Add Media Gallery (3 images max)');
 
-      // Row 1: Image 1 URL + Description
+      // Row 1: Image 1 URL + Description 1
       const url1Input = new TextInputBuilder()
         .setCustomId('gallery_url1')
         .setLabel('Image 1 URL (Required)')
@@ -366,7 +366,7 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('Alt text for image 1');
 
-      // Row 2: Image 1 Spoiler + Image 2 URL
+      // Row 2: Spoiler 1 + Image 2 URL
       const spoiler1Input = new TextInputBuilder()
         .setCustomId('gallery_spoiler1')
         .setLabel('Spoiler 1? (true/false)')
@@ -403,7 +403,7 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('https://example.com/image3.png');
 
-      // Row 4: Image 3 Description + Spoiler + Image 4 URL
+      // Row 4: Image 3 Description + Spoiler
       const desc3Input = new TextInputBuilder()
         .setCustomId('gallery_desc3')
         .setLabel('Description 3 (Optional)')
@@ -418,55 +418,12 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('false');
 
-      const url4Input = new TextInputBuilder()
-        .setCustomId('gallery_url4')
-        .setLabel('Image 4 URL (Optional)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('https://example.com/image4.png');
-
-      // Row 5: Image 4 Description + Spoiler + Image 5 URL + Description + Spoiler
-      const desc4Input = new TextInputBuilder()
-        .setCustomId('gallery_desc4')
-        .setLabel('Description 4 (Optional)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('Alt text for image 4');
-
-      const spoiler4Input = new TextInputBuilder()
-        .setCustomId('gallery_spoiler4')
-        .setLabel('Spoiler 4? (true/false)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('false');
-
-      const url5Input = new TextInputBuilder()
-        .setCustomId('gallery_url5')
-        .setLabel('Image 5 URL (Optional)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('https://example.com/image5.png');
-
-      const desc5Input = new TextInputBuilder()
-        .setCustomId('gallery_desc5')
-        .setLabel('Description 5 (Optional)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('Alt text for image 5');
-
-      const spoiler5Input = new TextInputBuilder()
-        .setCustomId('gallery_spoiler5')
-        .setLabel('Spoiler 5? (true/false)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('false');
-
       modal.addComponents(
         new ActionRowBuilder().addComponents(url1Input, desc1Input),
         new ActionRowBuilder().addComponents(spoiler1Input, url2Input),
-        new ActionRowBuilder().addComponents(desc2Input, spoiler2Input, url3Input),
-        new ActionRowBuilder().addComponents(desc3Input, spoiler3Input, url4Input),
-        new ActionRowBuilder().addComponents(desc4Input, spoiler4Input, url5Input, desc5Input, spoiler5Input)
+        new ActionRowBuilder().addComponents(desc2Input, spoiler2Input),
+        new ActionRowBuilder().addComponents(url3Input, desc3Input),
+        new ActionRowBuilder().addComponents(spoiler3Input)
       );
       await interaction.showModal(modal);
     }
@@ -661,23 +618,35 @@ const buttons = [
   {
     customId: 'embed_creator_reset',
     async execute(interaction) {
-      await interaction.deferUpdate();
       const userId = interaction.user.id;
-      interaction.client.embedCreatorManager.resetState(userId);
-      const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
-      const targetChannel = interaction.client.channels.cache.get(state.targetChannelId);
+      logger.info('Reset button clicked', { userId, interactionId: interaction.id });
+      try {
+        await interaction.deferUpdate();
+        interaction.client.embedCreatorManager.resetState(userId);
+        const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
+        const targetChannel = interaction.client.channels.cache.get(state.targetChannelId);
 
-      await interaction.client.embedCreatorManager.updatePreview(userId);
-      await interaction.client.embedCreatorManager.updateControls(userId, targetChannel || 'unknown channel');
+        await interaction.client.embedCreatorManager.updatePreview(userId);
+        await interaction.client.embedCreatorManager.updateControls(userId, targetChannel || 'unknown channel');
+        logger.info('Reset completed successfully', { userId, interactionId: interaction.id });
+      } catch (error) {
+        logger.error('Reset failed', { userId: interaction.user.id, interactionId: interaction.id, error: error.stack });
+      }
     }
   },
   {
     customId: 'embed_creator_cancel',
     async execute(interaction) {
-      await interaction.deferUpdate();
       const userId = interaction.user.id;
-      interaction.client.embedCreatorManager.clearState(userId);
-      await interaction.client.embedCreatorManager.deletePreviewAndControls(userId, interaction.user);
+      logger.info('Cancel button clicked', { userId, interactionId: interaction.id });
+      try {
+        await interaction.deferUpdate();
+        interaction.client.embedCreatorManager.clearState(userId);
+        await interaction.client.embedCreatorManager.deletePreviewAndControls(userId, interaction.user);
+        logger.info('Cancel completed successfully', { userId, interactionId: interaction.id });
+      } catch (error) {
+        logger.error('Cancel failed', { userId: interaction.user.id, interactionId: interaction.id, error: error.stack });
+      }
     }
   }
 ];
