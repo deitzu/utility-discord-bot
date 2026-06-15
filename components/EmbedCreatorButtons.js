@@ -8,6 +8,7 @@ async function updatePreview(interaction) {
   const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
   const targetChannel = interaction.client.channels.cache.get(state.targetChannelId);
 
+  await interaction.deferUpdate();
   await interaction.client.embedCreatorManager.updatePreview(userId);
   await interaction.client.embedCreatorManager.updateControls(userId, targetChannel || 'unknown channel');
 }
@@ -147,7 +148,25 @@ const buttons = [
         .setRequired(true)
         .setPlaceholder('Enter the index number...');
 
-      modal.addComponents(new ActionRowBuilder().addComponents(input));
+      const spacingInput = new TextInputBuilder()
+        .setCustomId('separator_spacing')
+        .setLabel('Spacing (1=Small, 2=Large)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('1');
+
+      const dividerInput = new TextInputBuilder()
+        .setCustomId('separator_divider')
+        .setLabel('Show Divider Line? (true/false)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('true');
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(input),
+        new ActionRowBuilder().addComponents(spacingInput),
+        new ActionRowBuilder().addComponents(dividerInput)
+      );
       await interaction.showModal(modal);
     }
   },
@@ -178,11 +197,255 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('my_custom_id');
 
+      const urlInput = new TextInputBuilder()
+        .setCustomId('button_url')
+        .setLabel('Button URL (Optional, for Link buttons)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('https://example.com');
+
+      const styleInput = new TextInputBuilder()
+        .setCustomId('button_style')
+        .setLabel('Button Style (1=Primary, 2=Secondary, 3=Success, 4=Danger, 5=Link)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('1');
+
+      const emojiInput = new TextInputBuilder()
+        .setCustomId('button_emoji')
+        .setLabel('Emoji (Optional, name:id:animated or 🎉)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('🎉 or name:id:animated');
+
       modal.addComponents(
         new ActionRowBuilder().addComponents(labelInput),
-        new ActionRowBuilder().addComponents(idInput)
+        new ActionRowBuilder().addComponents(idInput),
+        new ActionRowBuilder().addComponents(urlInput),
+        new ActionRowBuilder().addComponents(styleInput),
+        new ActionRowBuilder().addComponents(emojiInput)
       );
       await interaction.showModal(modal);
+    }
+  },
+  {
+    customId: 'embed_creator_section_add',
+    async execute(interaction) {
+      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
+      if (state.v2.textDisplays.length === 0) {
+        return interaction.reply({ content: 'Add some text displays first before adding sections.', ephemeral: true });
+      }
+
+      const modal = new ModalBuilder()
+        .setCustomId('embed_creator_modal_section')
+        .setTitle('Add Section');
+
+      const text1Input = new TextInputBuilder()
+        .setCustomId('section_text1')
+        .setLabel('Text Display 1 (Required)')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true)
+        .setPlaceholder('First text display content...');
+
+      const text2Input = new TextInputBuilder()
+        .setCustomId('section_text2')
+        .setLabel('Text Display 2 (Optional)')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(false)
+        .setPlaceholder('Second text display content...');
+
+      const text3Input = new TextInputBuilder()
+        .setCustomId('section_text3')
+        .setLabel('Text Display 3 (Optional)')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(false)
+        .setPlaceholder('Third text display content...');
+
+      const accessoryInput = new TextInputBuilder()
+        .setCustomId('section_accessory')
+        .setLabel('Accessory Type (button / thumbnail / none)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('button');
+
+      const accessoryLabelInput = new TextInputBuilder()
+        .setCustomId('section_accessory_label')
+        .setLabel('Accessory Label (for button)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('Click me');
+
+      const accessoryUrlInput = new TextInputBuilder()
+        .setCustomId('section_accessory_url')
+        .setLabel('Accessory URL (for link button)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('https://example.com');
+
+      const accessoryStyleInput = new TextInputBuilder()
+        .setCustomId('section_accessory_style')
+        .setLabel('Accessory Style (1-5, for button)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('1');
+
+      const accessoryEmojiInput = new TextInputBuilder()
+        .setCustomId('section_accessory_emoji')
+        .setLabel('Accessory Emoji (name:id:animated or 🎉)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('🎉');
+
+      const thumbnailUrlInput = new TextInputBuilder()
+        .setCustomId('section_thumbnail_url')
+        .setLabel('Thumbnail URL (for thumbnail accessory)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('https://example.com/image.png');
+
+      const thumbnailDescInput = new TextInputBuilder()
+        .setCustomId('section_thumbnail_desc')
+        .setLabel('Thumbnail Description (Optional)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('Alt text');
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(text1Input),
+        new ActionRowBuilder().addComponents(text2Input),
+        new ActionRowBuilder().addComponents(text3Input),
+        new ActionRowBuilder().addComponents(accessoryInput),
+        new ActionRowBuilder().addComponents(accessoryLabelInput),
+        new ActionRowBuilder().addComponents(accessoryUrlInput),
+        new ActionRowBuilder().addComponents(accessoryStyleInput),
+        new ActionRowBuilder().addComponents(accessoryEmojiInput),
+        new ActionRowBuilder().addComponents(thumbnailUrlInput),
+        new ActionRowBuilder().addComponents(thumbnailDescInput)
+      );
+      await interaction.showModal(modal);
+    }
+  },
+  {
+    customId: 'embed_creator_section_remove',
+    async execute(interaction) {
+      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
+      if (state.v2.sections.length > 0) {
+        interaction.client.embedCreatorManager.removeSection(interaction.user.id);
+        await updatePreview(interaction);
+      } else {
+        await interaction.reply({ content: 'No sections to remove.', ephemeral: true });
+      }
+    }
+  },
+  {
+    customId: 'embed_creator_gallery_add',
+    async execute(interaction) {
+      const modal = new ModalBuilder()
+        .setCustomId('embed_creator_modal_gallery')
+        .setTitle('Add Media Gallery');
+
+      const url1Input = new TextInputBuilder()
+        .setCustomId('gallery_url1')
+        .setLabel('Image URL 1 (Required)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setPlaceholder('https://example.com/image1.png');
+
+      const desc1Input = new TextInputBuilder()
+        .setCustomId('gallery_desc1')
+        .setLabel('Description 1 (Optional)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('Alt text for image 1');
+
+      const spoiler1Input = new TextInputBuilder()
+        .setCustomId('gallery_spoiler1')
+        .setLabel('Spoiler 1? (true/false)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('false');
+
+      const url2Input = new TextInputBuilder()
+        .setCustomId('gallery_url2')
+        .setLabel('Image URL 2 (Optional)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('https://example.com/image2.png');
+
+      const desc2Input = new TextInputBuilder()
+        .setCustomId('gallery_desc2')
+        .setLabel('Description 2 (Optional)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('Alt text for image 2');
+
+      const spoiler2Input = new TextInputBuilder()
+        .setCustomId('gallery_spoiler2')
+        .setLabel('Spoiler 2? (true/false)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('false');
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(url1Input),
+        new ActionRowBuilder().addComponents(desc1Input),
+        new ActionRowBuilder().addComponents(spoiler1Input),
+        new ActionRowBuilder().addComponents(url2Input),
+        new ActionRowBuilder().addComponents(desc2Input)
+      );
+      await interaction.showModal(modal);
+    }
+  },
+  {
+    customId: 'embed_creator_gallery_remove',
+    async execute(interaction) {
+      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
+      if (state.v2.mediaGallery.length > 0) {
+        interaction.client.embedCreatorManager.removeMediaGallery(interaction.user.id);
+        await updatePreview(interaction);
+      } else {
+        await interaction.reply({ content: 'No media galleries to remove.', ephemeral: true });
+      }
+    }
+  },
+  {
+    customId: 'embed_creator_file_add',
+    async execute(interaction) {
+      const modal = new ModalBuilder()
+        .setCustomId('embed_creator_modal_file')
+        .setTitle('Add File');
+
+      const urlInput = new TextInputBuilder()
+        .setCustomId('file_url')
+        .setLabel('File URL (attachment:// or https://)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setPlaceholder('attachment://file.pdf or https://example.com/file.pdf');
+
+      const spoilerInput = new TextInputBuilder()
+        .setCustomId('file_spoiler')
+        .setLabel('Spoiler? (true/false)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('false');
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(urlInput),
+        new ActionRowBuilder().addComponents(spoilerInput)
+      );
+      await interaction.showModal(modal);
+    }
+  },
+  {
+    customId: 'embed_creator_file_remove',
+    async execute(interaction) {
+      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
+      if (state.v2.files.length > 0) {
+        interaction.client.embedCreatorManager.removeFile(interaction.user.id);
+        await updatePreview(interaction);
+      } else {
+        await interaction.reply({ content: 'No files to remove.', ephemeral: true });
+      }
     }
   },
   {
@@ -305,6 +568,7 @@ const buttons = [
   {
     customId: 'embed_creator_reset',
     async execute(interaction) {
+      await interaction.deferUpdate();
       const userId = interaction.user.id;
       interaction.client.embedCreatorManager.resetState(userId);
       const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
@@ -317,6 +581,7 @@ const buttons = [
   {
     customId: 'embed_creator_cancel',
     async execute(interaction) {
+      await interaction.deferUpdate();
       const userId = interaction.user.id;
       interaction.client.embedCreatorManager.clearState(userId);
       await interaction.client.embedCreatorManager.deletePreviewAndControls(userId, interaction.user);

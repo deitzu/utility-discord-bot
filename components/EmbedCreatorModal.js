@@ -4,6 +4,7 @@ const logger = createLogger('EmbedCreatorModal');
 
 async function updatePreview(interaction) {
   const userId = interaction.user.id;
+  await interaction.deferUpdate();
   await interaction.client.embedCreatorManager.updatePreview(userId);
 }
 
@@ -89,6 +90,8 @@ const modals = [
     async execute(interaction) {
       const indexStr = interaction.fields.getTextInputValue('index_input');
       const index = parseInt(indexStr);
+      const spacingStr = interaction.fields.getTextInputValue('separator_spacing');
+      const dividerStr = interaction.fields.getTextInputValue('separator_divider');
       
       if (isNaN(index)) {
         return interaction.reply({ content: 'Please enter a valid number for the index.', ephemeral: true });
@@ -99,10 +102,13 @@ const modals = [
         return interaction.reply({ content: `Invalid index. Please enter a number between 0 and ${state.v2.textDisplays.length - 1}.`, ephemeral: true });
       }
 
+      const spacing = spacingStr ? parseInt(spacingStr) : 1;
+      const divider = dividerStr !== 'false';
+
       if (state.v2.separators.includes(index)) {
         interaction.client.embedCreatorManager.removeSeparator(interaction.user.id, index);
       } else {
-        interaction.client.embedCreatorManager.addSeparator(interaction.user.id, index);
+        interaction.client.embedCreatorManager.addSeparator(interaction.user.id, index, { spacing, divider });
       }
       await updatePreview(interaction);
     }
@@ -112,8 +118,120 @@ const modals = [
     async execute(interaction) {
       const label = interaction.fields.getTextInputValue('button_label');
       const customId = interaction.fields.getTextInputValue('button_id');
+      const url = interaction.fields.getTextInputValue('button_url');
+      const styleStr = interaction.fields.getTextInputValue('button_style');
+      const emojiStr = interaction.fields.getTextInputValue('button_emoji');
       
-      interaction.client.embedCreatorManager.addButton(interaction.user.id, { label, customId: customId || undefined });
+      const style = styleStr ? parseInt(styleStr) : undefined;
+      let emoji = undefined;
+      if (emojiStr) {
+        if (emojiStr.includes(':')) {
+          const parts = emojiStr.split(':');
+          emoji = { name: parts[0], id: parts[1] ? parts[1] : undefined, animated: parts[2] === 'true' };
+        } else {
+          emoji = { name: emojiStr };
+        }
+      }
+      
+      interaction.client.embedCreatorManager.addButton(interaction.user.id, { 
+        label, 
+        customId: customId || undefined, 
+        url: url || undefined, 
+        style: style || undefined, 
+        emoji: emoji 
+      });
+      await updatePreview(interaction);
+    }
+  },
+  {
+    customId: 'embed_creator_modal_section',
+    async execute(interaction) {
+      const text1 = interaction.fields.getTextInputValue('section_text1');
+      const text2 = interaction.fields.getTextInputValue('section_text2');
+      const text3 = interaction.fields.getTextInputValue('section_text3');
+      const accessoryType = interaction.fields.getTextInputValue('section_accessory') || 'none';
+      
+      const textDisplays = [text1];
+      if (text2) textDisplays.push(text2);
+      if (text3) textDisplays.push(text3);
+      
+      let accessory = null;
+      if (accessoryType === 'button') {
+        const label = interaction.fields.getTextInputValue('section_accessory_label');
+        const url = interaction.fields.getTextInputValue('section_accessory_url');
+        const styleStr = interaction.fields.getTextInputValue('section_accessory_style');
+        const emojiStr = interaction.fields.getTextInputValue('section_accessory_emoji');
+        
+        if (label) {
+          const style = styleStr ? parseInt(styleStr) : undefined;
+          let emoji = undefined;
+          if (emojiStr) {
+            if (emojiStr.includes(':')) {
+              const parts = emojiStr.split(':');
+              emoji = { name: parts[0], id: parts[1] ? parts[1] : undefined, animated: parts[2] === 'true' };
+            } else {
+              emoji = { name: emojiStr };
+            }
+          }
+          accessory = { type: 'button', data: { label, url: url || undefined, style: style || undefined, emoji: emoji } };
+        }
+      } else if (accessoryType === 'thumbnail') {
+        const url = interaction.fields.getTextInputValue('section_thumbnail_url');
+        const description = interaction.fields.getTextInputValue('section_thumbnail_desc');
+        if (url) {
+          accessory = { type: 'thumbnail', data: { url, description: description || undefined } };
+        }
+      }
+      
+      const sectionData = { textDisplays, accessory };
+      interaction.client.embedCreatorManager.addSection(interaction.user.id, sectionData);
+      await updatePreview(interaction);
+    }
+  },
+  {
+    customId: 'embed_creator_modal_gallery',
+    async execute(interaction) {
+      const url1 = interaction.fields.getTextInputValue('gallery_url1');
+      const desc1 = interaction.fields.getTextInputValue('gallery_desc1');
+      const spoiler1Str = interaction.fields.getTextInputValue('gallery_spoiler1');
+      const url2 = interaction.fields.getTextInputValue('gallery_url2');
+      const desc2 = interaction.fields.getTextInputValue('gallery_desc2');
+      const spoiler2Str = interaction.fields.getTextInputValue('gallery_spoiler2');
+
+      const items = [];
+      if (url1) {
+        items.push({
+          media: { url: url1 },
+          description: desc1 || undefined,
+          spoiler: spoiler1Str === 'true'
+        });
+      }
+      if (url2) {
+        items.push({
+          media: { url: url2 },
+          description: desc2 || undefined,
+          spoiler: spoiler2Str === 'true'
+        });
+      }
+
+      if (items.length > 0) {
+        interaction.client.embedCreatorManager.addMediaGallery(interaction.user.id, { items });
+      }
+      await updatePreview(interaction);
+    }
+  },
+  {
+    customId: 'embed_creator_modal_file',
+    async execute(interaction) {
+      const url = interaction.fields.getTextInputValue('file_url');
+      const spoilerStr = interaction.fields.getTextInputValue('file_spoiler');
+
+      if (url) {
+        interaction.client.embedCreatorManager.addFile(interaction.user.id, { 
+          url, 
+          spoiler: spoilerStr === 'true' 
+        });
+      }
       await updatePreview(interaction);
     }
   }

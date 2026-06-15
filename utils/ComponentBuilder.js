@@ -180,7 +180,8 @@ export class ComponentBuilder {
         if (text) {
           containerComponents.push(this.createTextDisplay(text));
           if (separatorIndices && separatorIndices.includes(index)) {
-            containerComponents.push(this.createSeparator());
+            const sep = Array.isArray(separator) ? separator.find(s => s.index === index || (typeof s === 'number' && s === index)) : null;
+            containerComponents.push(this.createSeparator(sep ? { spacing: sep.spacing, divider: sep.divider } : {}));
           }
         }
       });

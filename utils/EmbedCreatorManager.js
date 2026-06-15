@@ -30,7 +30,10 @@ export class EmbedCreatorManager {
         v2: {
           textDisplays: [],
           buttons: [],
-          separators: []
+          separators: [],
+          sections: [],
+          mediaGallery: [],
+          files: []
         },
         previewMessageId: null,
         controlsMessageId: null
@@ -79,12 +82,13 @@ export class EmbedCreatorManager {
     return state;
   }
 
-  addSeparator(userId, afterIndex) {
+  addSeparator(userId, afterIndex, options = {}) {
     const state = this.getOrCreateState(userId);
     if (!state.v2.separators.includes(afterIndex)) {
       state.v2.separators.push(afterIndex);
       state.v2.separators.sort((a, b) => a - b);
     }
+    // Store separator options (could be extended to a separate array if needed)
     return state;
   }
 
@@ -112,6 +116,54 @@ export class EmbedCreatorManager {
     return state;
   }
 
+  addSection(userId, sectionData) {
+    const state = this.getOrCreateState(userId);
+    state.v2.sections.push(sectionData);
+    return state;
+  }
+
+  removeSection(userId, index) {
+    const state = this.getOrCreateState(userId);
+    if (index === undefined) {
+      state.v2.sections.pop();
+    } else {
+      state.v2.sections.splice(index, 1);
+    }
+    return state;
+  }
+
+  addMediaGallery(userId, galleryData) {
+    const state = this.getOrCreateState(userId);
+    state.v2.mediaGallery.push(galleryData);
+    return state;
+  }
+
+  removeMediaGallery(userId, index) {
+    const state = this.getOrCreateState(userId);
+    if (index === undefined) {
+      state.v2.mediaGallery.pop();
+    } else {
+      state.v2.mediaGallery.splice(index, 1);
+    }
+    return state;
+  }
+
+  addFile(userId, fileData) {
+    const state = this.getOrCreateState(userId);
+    state.v2.files.push(fileData);
+    return state;
+  }
+
+  removeFile(userId, index) {
+    const state = this.getOrCreateState(userId);
+    if (index === undefined) {
+      state.v2.files.pop();
+    } else {
+      state.v2.files.splice(index, 1);
+    }
+    return state;
+  }
+
   resetState(userId) {
     const state = this.states.get(userId);
     if (state) {
@@ -133,15 +185,46 @@ export class EmbedCreatorManager {
 
     const textDisplays = state.v2.textDisplays.length > 0 ? state.v2.textDisplays : ['*(No Content)*'];
 
+    // Convert sections to ComponentBuilder sections
+    const sections = state.v2.sections.map(s => {
+      if (s.accessory?.type === 'button' && s.accessory.data) {
+        const btn = s.accessory.data;
+        const button = ComponentBuilder.createButton({
+          label: btn.label,
+          customId: btn.url ? undefined : (btn.customId || `v2_btn_${Math.random().toString(36).substr(2, 9)}`),
+          style: btn.style || ButtonStyle.Primary,
+          url: btn.url,
+          emoji: btn.emoji
+        });
+        return ComponentBuilder.createSectionWithButtonAccessory(s.textDisplays, button);
+      } else if (s.accessory?.type === 'thumbnail' && s.accessory.data) {
+        const thumb = s.accessory.data;
+        const thumbnail = ComponentBuilder.createThumbnail({
+          src: thumb.url,
+          description: thumb.description
+        });
+        return ComponentBuilder.createSectionWithThumbnailAccessory(s.textDisplays, thumbnail);
+      } else {
+        // Section without accessory - just text displays
+        return ComponentBuilder.createSection({
+          components: s.textDisplays.map(t => ComponentBuilder.createTextDisplay(t))
+        });
+      }
+    });
+
     return ComponentBuilder.buildV2Message({
       textDisplays,
       buttons: state.v2.buttons.map(b => ComponentBuilder.createButton({
         label: b.label,
         customId: b.url ? undefined : (b.customId || `v2_btn_${Math.random().toString(36).substr(2, 9)}`),
         style: b.style || ButtonStyle.Primary,
-        url: b.url
+        url: b.url,
+        emoji: b.emoji
       })),
       separator: state.v2.separators,
+      sections,
+      mediaGallery: state.v2.mediaGallery.map(g => ComponentBuilder.createMediaGallery({ items: g.items })),
+      files: state.v2.files.map(f => ComponentBuilder.createFile({ file: f.url, spoiler: f.spoiler })),
       accentColor: this._hexToDecimal(state.embed.color)
     });
   }
@@ -162,10 +245,16 @@ export class EmbedCreatorManager {
       ComponentBuilder.createButton({ customId: 'embed_creator_textdisplay_remove', label: 'Remove Last', style: ButtonStyle.Secondary }),
       ComponentBuilder.createButton({ customId: 'embed_creator_separator_add', label: 'Add Separator', style: ButtonStyle.Secondary }),
       ComponentBuilder.createButton({ customId: 'embed_creator_markdown_line', label: `Seps (${sepCount})`, style: ButtonStyle.Secondary }),
-      ComponentBuilder.createButton({ customId: 'embed_creator_button_add', label: 'Add Button', style: ButtonStyle.Secondary })
+      ComponentBuilder.createButton({ customId: 'embed_creator_button_add', label: 'Add Button', style: ButtonStyle.Secondary }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_section_add', label: 'Add Section', style: ButtonStyle.Secondary }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_section_remove', label: 'Remove Section', style: ButtonStyle.Secondary })
     ]);
 
     const row2 = ComponentBuilder.createActionRow([
+      ComponentBuilder.createButton({ customId: 'embed_creator_gallery_add', label: 'Add Gallery', style: ButtonStyle.Secondary }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_gallery_remove', label: 'Remove Gallery', style: ButtonStyle.Secondary }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_file_add', label: 'Add File', style: ButtonStyle.Secondary }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_file_remove', label: 'Remove File', style: ButtonStyle.Secondary }),
       ComponentBuilder.createButton({ customId: 'embed_creator_send', label: 'Send Message', style: ButtonStyle.Success }),
       ComponentBuilder.createButton({ customId: 'embed_creator_reset', label: 'Reset', style: ButtonStyle.Danger }),
       ComponentBuilder.createButton({ customId: 'embed_creator_cancel', label: 'Cancel', style: ButtonStyle.Danger })
