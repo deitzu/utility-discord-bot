@@ -310,6 +310,13 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('Alt text');
 
+      const thumbnailSizeInput = new TextInputBuilder()
+        .setCustomId('section_thumbnail_size')
+        .setLabel('Thumbnail Size (40, 64, 80, 100, 128, 256, 512)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('64');
+
       modal.addComponents(
         new ActionRowBuilder().addComponents(text1Input),
         new ActionRowBuilder().addComponents(text2Input),
@@ -342,11 +349,12 @@ const buttons = [
     async execute(interaction) {
       const modal = new ModalBuilder()
         .setCustomId('embed_creator_modal_gallery')
-        .setTitle('Add Media Gallery');
+        .setTitle('Add Media Gallery (5 images max)');
 
+      // Row 1: Image 1 URL + Description
       const url1Input = new TextInputBuilder()
         .setCustomId('gallery_url1')
-        .setLabel('Image URL 1 (Required)')
+        .setLabel('Image 1 URL (Required)')
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
         .setPlaceholder('https://example.com/image1.png');
@@ -358,6 +366,7 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('Alt text for image 1');
 
+      // Row 2: Image 1 Spoiler + Image 2 URL
       const spoiler1Input = new TextInputBuilder()
         .setCustomId('gallery_spoiler1')
         .setLabel('Spoiler 1? (true/false)')
@@ -367,11 +376,12 @@ const buttons = [
 
       const url2Input = new TextInputBuilder()
         .setCustomId('gallery_url2')
-        .setLabel('Image URL 2 (Optional)')
+        .setLabel('Image 2 URL (Optional)')
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
         .setPlaceholder('https://example.com/image2.png');
 
+      // Row 3: Image 2 Description + Spoiler + Image 3 URL
       const desc2Input = new TextInputBuilder()
         .setCustomId('gallery_desc2')
         .setLabel('Description 2 (Optional)')
@@ -386,12 +396,77 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('false');
 
+      const url3Input = new TextInputBuilder()
+        .setCustomId('gallery_url3')
+        .setLabel('Image 3 URL (Optional)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('https://example.com/image3.png');
+
+      // Row 4: Image 3 Description + Spoiler + Image 4 URL
+      const desc3Input = new TextInputBuilder()
+        .setCustomId('gallery_desc3')
+        .setLabel('Description 3 (Optional)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('Alt text for image 3');
+
+      const spoiler3Input = new TextInputBuilder()
+        .setCustomId('gallery_spoiler3')
+        .setLabel('Spoiler 3? (true/false)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('false');
+
+      const url4Input = new TextInputBuilder()
+        .setCustomId('gallery_url4')
+        .setLabel('Image 4 URL (Optional)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('https://example.com/image4.png');
+
+      // Row 5: Image 4 Description + Spoiler + Image 5 URL + Description + Spoiler
+      const desc4Input = new TextInputBuilder()
+        .setCustomId('gallery_desc4')
+        .setLabel('Description 4 (Optional)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('Alt text for image 4');
+
+      const spoiler4Input = new TextInputBuilder()
+        .setCustomId('gallery_spoiler4')
+        .setLabel('Spoiler 4? (true/false)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('false');
+
+      const url5Input = new TextInputBuilder()
+        .setCustomId('gallery_url5')
+        .setLabel('Image 5 URL (Optional)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('https://example.com/image5.png');
+
+      const desc5Input = new TextInputBuilder()
+        .setCustomId('gallery_desc5')
+        .setLabel('Description 5 (Optional)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('Alt text for image 5');
+
+      const spoiler5Input = new TextInputBuilder()
+        .setCustomId('gallery_spoiler5')
+        .setLabel('Spoiler 5? (true/false)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('false');
+
       modal.addComponents(
-        new ActionRowBuilder().addComponents(url1Input),
-        new ActionRowBuilder().addComponents(desc1Input),
-        new ActionRowBuilder().addComponents(spoiler1Input),
-        new ActionRowBuilder().addComponents(url2Input),
-        new ActionRowBuilder().addComponents(desc2Input)
+        new ActionRowBuilder().addComponents(url1Input, desc1Input),
+        new ActionRowBuilder().addComponents(spoiler1Input, url2Input),
+        new ActionRowBuilder().addComponents(desc2Input, spoiler2Input, url3Input),
+        new ActionRowBuilder().addComponents(desc3Input, spoiler3Input, url4Input),
+        new ActionRowBuilder().addComponents(desc4Input, spoiler4Input, url5Input, desc5Input)
       );
       await interaction.showModal(modal);
     }
@@ -562,6 +637,24 @@ const buttons = [
       } catch (error) {
         logger.error(`Error sending message to channel ${state.targetChannelId}:`, error);
         await interaction.reply({ content: 'Failed to send message to the channel. Make sure I have permission to send messages there.', ephemeral: true });
+      }
+    }
+  },
+  {
+    customId: 'embed_creator_preview',
+    async execute(interaction) {
+      await interaction.deferUpdate();
+      const userId = interaction.user.id;
+      const finalMessage = interaction.client.embedCreatorManager.buildFinalMessage(userId);
+      if (!finalMessage) {
+        return interaction.followUp({ content: 'Failed to build preview message.', ephemeral: true });
+      }
+      try {
+        await interaction.user.send(finalMessage);
+        await interaction.followUp({ content: '✅ Preview sent to your DM!', ephemeral: true });
+      } catch (error) {
+        logger.error('Failed to send preview DM:', error);
+        await interaction.followUp({ content: 'Failed to send preview. Make sure your DMs are open.', ephemeral: true });
       }
     }
   },

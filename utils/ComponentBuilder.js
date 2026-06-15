@@ -165,45 +165,63 @@ export class ComponentBuilder {
     return fileComp;
   }
 
-  static buildV2Message({ titleTextDisplay, description, markdownContent, textDisplays = [], buttons = [], separator = false, components = [], sections = [], accentColor = 0x5865F2 }) {
+  static buildV2Message({ titleTextDisplay, description, markdownContent, textDisplays = [], buttons = [], separator = false, components = [], sections = [], mediaGallery = [], files = [], accentColor = 0x5865F2 }) {
     const containerComponents = [];
+    let componentIdCounter = 1;
+    
+    const getNextId = () => componentIdCounter++;
     
     const separatorIndices = Array.isArray(separator) ? separator : null;
     const isSeparatorEnabled = separator === true;
 
     if (titleTextDisplay) {
-      containerComponents.push(this.createTextDisplay("# " + titleTextDisplay));
+      containerComponents.push(this.createTextDisplay("# " + titleTextDisplay, getNextId()));
     }
 
     if (Array.isArray(textDisplays)) {
       textDisplays.forEach((text, index) => {
         if (text) {
-          containerComponents.push(this.createTextDisplay(text));
+          containerComponents.push(this.createTextDisplay(text, getNextId()));
           if (separatorIndices && separatorIndices.includes(index)) {
             const sep = Array.isArray(separator) ? separator.find(s => s.index === index || (typeof s === 'number' && s === index)) : null;
-            containerComponents.push(this.createSeparator(sep ? { spacing: sep.spacing, divider: sep.divider } : {}));
+            containerComponents.push(this.createSeparator(sep ? { spacing: sep.spacing, divider: sep.divider } : {}, getNextId()));
           }
         }
       });
     }
 
     if (markdownContent) {
-      containerComponents.push(this.createTextDisplay(markdownContent));
+      containerComponents.push(this.createTextDisplay(markdownContent, getNextId()));
     }
 
     const hasTitle = titleTextDisplay || markdownContent || (textDisplays.length > 0 && (separatorIndices === null || !separatorIndices.includes(textDisplays.length - 1)));
-    const hasContent = description || components.length > 0 || buttons.length > 0 || sections.length > 0;
+    const hasContent = description || components.length > 0 || buttons.length > 0 || sections.length > 0 || mediaGallery.length > 0 || files.length > 0;
     if (isSeparatorEnabled || (separatorIndices === null && hasTitle && hasContent)) {
-      containerComponents.push(this.createSeparator());
+      containerComponents.push(this.createSeparator({}, getNextId()));
     }
 
     if (description) {
-      containerComponents.push(this.createTextDisplay(description));
+      containerComponents.push(this.createTextDisplay(description, getNextId()));
     }
 
     if (Array.isArray(sections)) {
       sections.forEach(section => {
+        if (!section.id) section.id = getNextId();
         containerComponents.push(section);
+      });
+    }
+
+    if (Array.isArray(mediaGallery) && mediaGallery.length > 0) {
+      mediaGallery.forEach(gallery => {
+        if (!gallery.id) gallery.id = getNextId();
+        containerComponents.push(gallery);
+      });
+    }
+
+    if (Array.isArray(files) && files.length > 0) {
+      files.forEach(file => {
+        if (!file.id) file.id = getNextId();
+        containerComponents.push(file);
       });
     }
 
@@ -220,17 +238,25 @@ export class ComponentBuilder {
       });
     }
 
-    otherComponents.forEach(comp => containerComponents.push(comp));
+    otherComponents.forEach(comp => {
+      if (!comp.id) comp.id = getNextId();
+      containerComponents.push(comp);
+    });
 
     if (allButtons.length > 0) {
       for (let i = 0; i < allButtons.length; i += 5) {
-        containerComponents.push(this.createActionRow(allButtons.slice(i, i + 5)));
+        const rowButtons = allButtons.slice(i, i + 5).map(btn => {
+          if (!btn.id) btn.id = getNextId();
+          return btn;
+        });
+        containerComponents.push(this.createActionRow(rowButtons, getNextId()));
       }
     }
 
     const container = this.createContainer({
       accentColor: accentColor,
-      components: containerComponents
+      components: containerComponents,
+      id: getNextId()
     });
 
     return {

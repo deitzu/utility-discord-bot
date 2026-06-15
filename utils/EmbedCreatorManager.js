@@ -31,6 +31,7 @@ export class EmbedCreatorManager {
           textDisplays: [],
           buttons: [],
           separators: [],
+          separatorOptions: new Map(),
           sections: [],
           mediaGallery: [],
           files: []
@@ -88,13 +89,16 @@ export class EmbedCreatorManager {
       state.v2.separators.push(afterIndex);
       state.v2.separators.sort((a, b) => a - b);
     }
-    // Store separator options (could be extended to a separate array if needed)
+    const spacing = options.spacing === 2 ? 2 : 1;
+    const divider = options.divider !== false;
+    state.v2.separatorOptions.set(afterIndex, { spacing, divider });
     return state;
   }
 
   removeSeparator(userId, afterIndex) {
     const state = this.getOrCreateState(userId);
     state.v2.separators = state.v2.separators.filter(i => i !== afterIndex);
+    state.v2.separatorOptions.delete(afterIndex);
     return state;
   }
 
@@ -164,6 +168,62 @@ export class EmbedCreatorManager {
     return state;
   }
 
+  validateState(userId) {
+    const state = this.states.get(userId);
+    if (!state) return { valid: true, warnings: [], errors: [] };
+
+    const warnings = [];
+    const errors = [];
+
+    // Count components
+    let componentCount = 0;
+    componentCount += state.v2.textDisplays.length; // TextDisplays
+    componentCount += state.v2.buttons.length; // Buttons
+    componentCount += state.v2.separators.length; // Separators
+    componentCount += state.v2.sections.length; // Sections (each section counts as 1)
+    componentCount += state.v2.mediaGallery.length; // MediaGalleries
+    componentCount += state.v2.files.length; // Files
+    
+    // Action rows for buttons (5 per row)
+    const actionRows = Math.ceil(state.v2.buttons.length / 5);
+    componentCount += actionRows;
+    
+    // Section accessories (each counts as 1)
+    componentCount += state.v2.sections.filter(s => s.accessory).length;
+
+    if (componentCount > 40) {
+      errors.push(`Component count (${componentCount}) exceeds Discord limit of 40`);
+    } else if (componentCount > 35) {
+      warnings.push(`Component count (${componentCount}) is close to Discord limit of 40`);
+    }
+
+    // Check text length (4000 chars total across all TextDisplays)
+    let totalTextLength = 0;
+    state.v2.textDisplays.forEach(t => { totalTextLength += t.length; });
+    state.v2.sections.forEach(s => {
+      s.textDisplays.forEach(t => { totalTextLength += t.length; });
+    });
+    if (state.embed.description) totalTextLength += state.embed.description.length;
+    state.v2.buttons.forEach(b => { totalTextLength += b.label.length; });
+    state.v2.sections.forEach(s => {
+      if (s.accessory?.data?.label) totalTextLength += s.accessory.data.label.length;
+    });
+    state.v2.mediaGallery.forEach(g => {
+      g.items.forEach(item => {
+        if (item.description) totalTextLength += item.description.length;
+      });
+    });
+    state.v2.files.forEach(f => { totalTextLength += f.url.length; });
+
+    if (totalTextLength > 4000) {
+      errors.push(`Total text length (${totalTextLength}) exceeds Discord limit of 4000 characters`);
+    } else if (totalTextLength > 3500) {
+      warnings.push(`Total text length (${totalTextLength}) is close to Discord limit of 4000 characters`);
+    }
+
+    return { valid: errors.length === 0, warnings, errors };
+  }
+
   resetState(userId) {
     const state = this.states.get(userId);
     if (state) {
@@ -201,7 +261,8 @@ export class EmbedCreatorManager {
         const thumb = s.accessory.data;
         const thumbnail = ComponentBuilder.createThumbnail({
           src: thumb.url,
-          description: thumb.description
+          description: thumb.description,
+          size: thumb.size
         });
         return ComponentBuilder.createSectionWithThumbnailAccessory(s.textDisplays, thumbnail);
       } else {
@@ -212,6 +273,17 @@ export class EmbedCreatorManager {
       }
     });
 
+    const separatorWithOptions = state.v2.separators.map(index => {
+      const options = state.v2.separatorOptions.get(index);
+      if (options) {
+        return { index, spacing: options.spacing, divider: options.divider };
+      }
+      return index;
+    });
+
+    const embedDescription = state.embed.description?.trim() || undefined;
+    const embedImage = state.embed.image?.url?.trim() || undefined;
+    
     return ComponentBuilder.buildV2Message({
       textDisplays,
       buttons: state.v2.buttons.map(b => ComponentBuilder.createButton({
@@ -221,10 +293,74 @@ export class EmbedCreatorManager {
         url: b.url,
         emoji: b.emoji
       })),
-      separator: state.v2.separators,
+      separator: separatorWithOptions,
       sections,
       mediaGallery: state.v2.mediaGallery.map(g => ComponentBuilder.createMediaGallery({ items: g.items })),
       files: state.v2.files.map(f => ComponentBuilder.createFile({ file: f.url, spoiler: f.spoiler })),
+      description: embedDescription,
+      accentColor: this._hexToDecimal(state.embed.color)
+    });
+  }
+
+  buildFinalMessage(userId) {
+    const style = getMessageStyle(this.config, 'embedCreator');
+    const state = this.states.get(userId);
+    if (!state || style !== 'v2') return null;
+
+    const textDisplays = state.v2.textDisplays.length > 0 ? state.v2.textDisplays : ['*(No Content)*'];
+
+    // Convert sections to ComponentBuilder sections
+    const sections = state.v2.sections.map(s => {
+      if (s.accessory?.type === 'button' && s.accessory.data) {
+        const btn = s.accessory.data;
+        const button = ComponentBuilder.createButton({
+          label: btn.label,
+          customId: btn.url ? undefined : (btn.customId || `v2_btn_${Math.random().toString(36).substr(2, 9)}`),
+          style: btn.style || ButtonStyle.Primary,
+          url: btn.url,
+          emoji: btn.emoji
+        });
+        return ComponentBuilder.createSectionWithButtonAccessory(s.textDisplays, button);
+      } else if (s.accessory?.type === 'thumbnail' && s.accessory.data) {
+        const thumb = s.accessory.data;
+        const thumbnail = ComponentBuilder.createThumbnail({
+          src: thumb.url,
+          description: thumb.description,
+          size: thumb.size
+        });
+        return ComponentBuilder.createSectionWithThumbnailAccessory(s.textDisplays, thumbnail);
+      } else {
+        // Section without accessory - just text displays
+        return ComponentBuilder.createSection({
+          components: s.textDisplays.map(t => ComponentBuilder.createTextDisplay(t))
+        });
+      }
+    });
+
+    const separatorWithOptions = state.v2.separators.map(index => {
+      const options = state.v2.separatorOptions.get(index);
+      if (options) {
+        return { index, spacing: options.spacing, divider: options.divider };
+      }
+      return index;
+    });
+
+    const embedDescription = state.embed.description?.trim() || undefined;
+    
+    return ComponentBuilder.buildV2Message({
+      textDisplays,
+      buttons: state.v2.buttons.map(b => ComponentBuilder.createButton({
+        label: b.label,
+        customId: b.url ? undefined : (b.customId || `v2_btn_${Math.random().toString(36).substr(2, 9)}`),
+        style: b.style || ButtonStyle.Primary,
+        url: b.url,
+        emoji: b.emoji
+      })),
+      separator: separatorWithOptions,
+      sections,
+      mediaGallery: state.v2.mediaGallery.map(g => ComponentBuilder.createMediaGallery({ items: g.items })),
+      files: state.v2.files.map(f => ComponentBuilder.createFile({ file: f.url, spoiler: f.spoiler })),
+      description: embedDescription,
       accentColor: this._hexToDecimal(state.embed.color)
     });
   }
@@ -233,6 +369,14 @@ export class EmbedCreatorManager {
     const style = getMessageStyle(this.config, 'embedCreator');
     const state = this.states.get(userId);
     if (!state || style !== 'v2') return null;
+
+    const validation = this.validateState(userId);
+    let warningText = '';
+    if (validation.warnings.length > 0 || validation.errors.length > 0) {
+      warningText = '\n\n**⚠️ Validation:**';
+      validation.warnings.forEach(w => { warningText += `\n⚠ ${w}`; });
+      validation.errors.forEach(e => { warningText += `\n❌ ${e}`; });
+    }
 
     const sepCount = state.v2.separators?.length || 0;
     let separatorList = '';
@@ -254,7 +398,11 @@ export class EmbedCreatorManager {
       ComponentBuilder.createButton({ customId: 'embed_creator_gallery_add', label: 'Add Gallery', style: ButtonStyle.Secondary }),
       ComponentBuilder.createButton({ customId: 'embed_creator_gallery_remove', label: 'Remove Gallery', style: ButtonStyle.Secondary }),
       ComponentBuilder.createButton({ customId: 'embed_creator_file_add', label: 'Add File', style: ButtonStyle.Secondary }),
-      ComponentBuilder.createButton({ customId: 'embed_creator_file_remove', label: 'Remove File', style: ButtonStyle.Secondary }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_file_remove', label: 'Remove File', style: ButtonStyle.Secondary })
+    ]);
+
+    const row3 = ComponentBuilder.createActionRow([
+      ComponentBuilder.createButton({ customId: 'embed_creator_preview', label: 'Preview', style: ButtonStyle.Primary }),
       ComponentBuilder.createButton({ customId: 'embed_creator_send', label: 'Send Message', style: ButtonStyle.Success }),
       ComponentBuilder.createButton({ customId: 'embed_creator_reset', label: 'Reset', style: ButtonStyle.Danger }),
       ComponentBuilder.createButton({ customId: 'embed_creator_cancel', label: 'Cancel', style: ButtonStyle.Danger })
@@ -262,9 +410,9 @@ export class EmbedCreatorManager {
 
     return ComponentBuilder.buildV2Message({
       textDisplays: [
-        `### Embed Creator\nYou are creating a message for ${targetChannel || 'unknown channel'}.\nUse the buttons below to customize your message.${separatorList}`
+        `### Embed Creator\nYou are creating a message for ${targetChannel || 'unknown channel'}.\nUse the buttons below to customize your message.${separatorList}${warningText}`
       ],
-      components: [row1, row2],
+      components: [row1, row2, row3],
       accentColor: this._hexToDecimal(state.embed.color)
     });
   }
