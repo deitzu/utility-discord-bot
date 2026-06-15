@@ -318,16 +318,11 @@ const buttons = [
         .setPlaceholder('64');
 
       modal.addComponents(
-        new ActionRowBuilder().addComponents(text1Input),
-        new ActionRowBuilder().addComponents(text2Input),
-        new ActionRowBuilder().addComponents(text3Input),
-        new ActionRowBuilder().addComponents(accessoryInput),
-        new ActionRowBuilder().addComponents(accessoryLabelInput),
-        new ActionRowBuilder().addComponents(accessoryUrlInput),
-        new ActionRowBuilder().addComponents(accessoryStyleInput),
-        new ActionRowBuilder().addComponents(accessoryEmojiInput),
-        new ActionRowBuilder().addComponents(thumbnailUrlInput),
-        new ActionRowBuilder().addComponents(thumbnailDescInput)
+        new ActionRowBuilder().addComponents(text1Input, text2Input),
+        new ActionRowBuilder().addComponents(text3Input, accessoryInput),
+        new ActionRowBuilder().addComponents(accessoryLabelInput, accessoryUrlInput, accessoryStyleInput),
+        new ActionRowBuilder().addComponents(accessoryEmojiInput, thumbnailUrlInput),
+        new ActionRowBuilder().addComponents(thumbnailDescInput, thumbnailSizeInput)
       );
       await interaction.showModal(modal);
     }
@@ -351,7 +346,7 @@ const buttons = [
         .setCustomId('embed_creator_modal_gallery')
         .setTitle('Add Media Gallery (3 images max)');
 
-      // Row 1: Image 1 URL + Description 1
+      // Image 1: URL + Description + Spoiler
       const url1Input = new TextInputBuilder()
         .setCustomId('gallery_url1')
         .setLabel('Image 1 URL (Required)')
@@ -366,7 +361,6 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('Alt text for image 1');
 
-      // Row 2: Spoiler 1 + Image 2 URL
       const spoiler1Input = new TextInputBuilder()
         .setCustomId('gallery_spoiler1')
         .setLabel('Spoiler 1? (true/false)')
@@ -374,6 +368,7 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('false');
 
+      // Image 2: URL + Description + Spoiler
       const url2Input = new TextInputBuilder()
         .setCustomId('gallery_url2')
         .setLabel('Image 2 URL (Optional)')
@@ -381,7 +376,6 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('https://example.com/image2.png');
 
-      // Row 3: Image 2 Description + Spoiler + Image 3 URL
       const desc2Input = new TextInputBuilder()
         .setCustomId('gallery_desc2')
         .setLabel('Description 2 (Optional)')
@@ -396,6 +390,7 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('false');
 
+      // Image 3: URL + Description + Spoiler
       const url3Input = new TextInputBuilder()
         .setCustomId('gallery_url3')
         .setLabel('Image 3 URL (Optional)')
@@ -403,7 +398,6 @@ const buttons = [
         .setRequired(false)
         .setPlaceholder('https://example.com/image3.png');
 
-      // Row 4: Image 3 Description + Spoiler
       const desc3Input = new TextInputBuilder()
         .setCustomId('gallery_desc3')
         .setLabel('Description 3 (Optional)')
@@ -420,10 +414,10 @@ const buttons = [
 
       modal.addComponents(
         new ActionRowBuilder().addComponents(url1Input, desc1Input),
-        new ActionRowBuilder().addComponents(spoiler1Input, url2Input),
-        new ActionRowBuilder().addComponents(desc2Input, spoiler2Input),
-        new ActionRowBuilder().addComponents(url3Input, desc3Input),
-        new ActionRowBuilder().addComponents(spoiler3Input)
+        new ActionRowBuilder().addComponents(spoiler1Input),
+        new ActionRowBuilder().addComponents(url2Input, desc2Input),
+        new ActionRowBuilder().addComponents(spoiler2Input),
+        new ActionRowBuilder().addComponents(url3Input, desc3Input, spoiler3Input)
       );
       await interaction.showModal(modal);
     }
@@ -628,6 +622,8 @@ const buttons = [
 
         await interaction.client.embedCreatorManager.updatePreview(userId);
         await interaction.client.embedCreatorManager.updateControls(userId, targetChannel || 'unknown channel');
+        
+        await interaction.editReply({ content: '✅ Preview has been reset to default.', components: [] });
         logger.info('Reset completed successfully', { userId, interactionId: interaction.id });
       } catch (error) {
         logger.error('Reset failed', { userId: interaction.user.id, interactionId: interaction.id, error: error.stack });
@@ -643,6 +639,8 @@ const buttons = [
         await interaction.deferUpdate();
         interaction.client.embedCreatorManager.clearState(userId);
         await interaction.client.embedCreatorManager.deletePreviewAndControls(userId, interaction.user);
+        
+        await interaction.editReply({ content: '❌ Embed creation cancelled.', components: [] });
         logger.info('Cancel completed successfully', { userId, interactionId: interaction.id });
       } catch (error) {
         logger.error('Cancel failed', { userId: interaction.user.id, interactionId: interaction.id, error: error.stack });
