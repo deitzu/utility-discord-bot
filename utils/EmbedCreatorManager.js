@@ -384,11 +384,14 @@ export class EmbedCreatorManager {
       separatorList = `\n**Separators after indices:** ${state.v2.separators.join(', ')}`;
     }
 
-    const row1 = ComponentBuilder.createActionRow([
+    const row1a = ComponentBuilder.createActionRow([
       ComponentBuilder.createButton({ customId: 'embed_creator_textdisplay_add', label: 'Add Text', style: ButtonStyle.Secondary }),
       ComponentBuilder.createButton({ customId: 'embed_creator_textdisplay_remove', label: 'Remove Last', style: ButtonStyle.Secondary }),
       ComponentBuilder.createButton({ customId: 'embed_creator_separator_add', label: 'Add Separator', style: ButtonStyle.Secondary }),
-      ComponentBuilder.createButton({ customId: 'embed_creator_markdown_line', label: `Seps (${sepCount})`, style: ButtonStyle.Secondary }),
+      ComponentBuilder.createButton({ customId: 'embed_creator_markdown_line', label: `Seps (${sepCount})`, style: ButtonStyle.Secondary })
+    ]);
+
+    const row1b = ComponentBuilder.createActionRow([
       ComponentBuilder.createButton({ customId: 'embed_creator_button_add', label: 'Add Button', style: ButtonStyle.Secondary }),
       ComponentBuilder.createButton({ customId: 'embed_creator_section_add', label: 'Add Section', style: ButtonStyle.Secondary }),
       ComponentBuilder.createButton({ customId: 'embed_creator_section_remove', label: 'Remove Section', style: ButtonStyle.Secondary })
@@ -412,7 +415,7 @@ export class EmbedCreatorManager {
       textDisplays: [
         `### Embed Creator\nYou are creating a message for ${targetChannel || 'unknown channel'}.\nUse the buttons below to customize your message.${separatorList}${warningText}`
       ],
-      components: [row1, row2, row3],
+      components: [row1a, row1b, row2, row3],
       accentColor: this._hexToDecimal(state.embed.color)
     });
   }
