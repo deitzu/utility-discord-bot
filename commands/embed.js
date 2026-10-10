@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { createLogger } from '../utils/Logger.js';
 import { getMessageStyle } from '../utils/ConfigLoader.js';
-import { safeRespond } from '../utils/InteractionSafe.js';
+import { EPHEMERAL, safeRespond } from '../utils/InteractionSafe.js';
 
 const logger = createLogger('EmbedCommand');
 
@@ -24,7 +24,7 @@ export default {
     // Discord only waits 3 seconds for a first answer. Opening the DM and sending two messages
     // can take longer on a slow connection, so acknowledge right away and answer afterwards.
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: EPHEMERAL });
     } catch (error) {
       logger.warn('Could not acknowledge /embed in time:', error.message);
       return;

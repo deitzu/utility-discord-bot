@@ -1,3 +1,4 @@
+import { EPHEMERAL } from '../utils/InteractionSafe.js';
 import { buildItemModal, MODAL_KINDS } from '../utils/EmbedV2Modals.js';
 
 const SESSION_EXPIRED = 'This session has expired (the bot may have restarted). Run `/embed` again to start a new one.';
@@ -9,12 +10,12 @@ const selects = [
     async execute(interaction) {
       const session = interaction.client.embedCreatorManager.getSession(interaction.user.id);
       if (!session) {
-        return interaction.reply({ content: SESSION_EXPIRED, ephemeral: true });
+        return interaction.reply({ content: SESSION_EXPIRED, flags: EPHEMERAL });
       }
 
       const kind = interaction.values[0];
       if (!MODAL_KINDS.includes(kind)) {
-        return interaction.reply({ content: 'Unknown component type.', ephemeral: true });
+        return interaction.reply({ content: 'Unknown component type.', flags: EPHEMERAL });
       }
 
       session.v2.pendingEdit = null; // this is an add, not an edit
@@ -28,7 +29,7 @@ const selects = [
       const manager = interaction.client.embedCreatorManager;
       const session = manager.getSession(interaction.user.id);
       if (!session) {
-        return interaction.reply({ content: SESSION_EXPIRED, ephemeral: true });
+        return interaction.reply({ content: SESSION_EXPIRED, flags: EPHEMERAL });
       }
 
       const index = parseInt(interaction.values[0], 10);

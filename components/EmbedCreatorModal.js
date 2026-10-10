@@ -1,3 +1,4 @@
+import { EPHEMERAL } from '../utils/InteractionSafe.js';
 import { LIMITS, importModel, parseHexColor, validateItem } from '../utils/EmbedV2Model.js';
 import { MODAL_IDS, MODAL_KINDS, itemLabel, kindOfItem, parseItemFromModal } from '../utils/EmbedV2Modals.js';
 
@@ -11,7 +12,7 @@ async function updatePreview(interaction) {
 }
 
 function replyEphemeral(interaction, content) {
-  return interaction.reply({ content, ephemeral: true });
+  return interaction.reply({ content, flags: EPHEMERAL });
 }
 
 /** Acknowledges the submit and re-renders the preview + controls DM messages. */
@@ -123,7 +124,7 @@ const legacyModals = [
 
       // Simple hex validation
       if (color && !/^#[0-9A-F]{6}$/i.test(color)) {
-        return interaction.reply({ content: 'Invalid hex color format. Use something like #0099ff', ephemeral: true });
+        return interaction.reply({ content: 'Invalid hex color format. Use something like #0099ff', flags: EPHEMERAL });
       }
 
       interaction.client.embedCreatorManager.updateState(interaction.user.id, { color: color || undefined });

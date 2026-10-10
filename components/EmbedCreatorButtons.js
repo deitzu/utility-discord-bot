@@ -1,3 +1,4 @@
+import { EPHEMERAL } from '../utils/InteractionSafe.js';
 import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, AttachmentBuilder } from 'discord.js';
 import { createLogger } from '../utils/Logger.js';
 import { getMessageStyle } from '../utils/ConfigLoader.js';
@@ -13,7 +14,7 @@ function isV2(interaction) {
 }
 
 async function safeReply(interaction, content) {
-  const payload = { content, ephemeral: true };
+  const payload = { content, flags: EPHEMERAL };
   if (interaction.replied || interaction.deferred) return interaction.followUp(payload);
   return interaction.reply(payload);
 }
@@ -96,7 +97,7 @@ const buttons = [
         ? `This JSON is ${json.length} characters, which is over the ${LIMITS.totalText}-character limit of the Import form, so it can only be kept as a backup.`
         : 'Paste the contents into **Import JSON** to load it again.';
 
-      await interaction.reply({ content: `Your message as JSON. ${note}`, files: [file], ephemeral: true });
+      await interaction.reply({ content: `Your message as JSON. ${note}`, files: [file], flags: EPHEMERAL });
     }
   },
   {
@@ -259,7 +260,7 @@ const buttons = [
     async execute(interaction) {
       const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
       if (state.embed.fields.length >= 25) {
-        return interaction.reply({ content: 'You can only have up to 25 fields.', ephemeral: true });
+        return interaction.reply({ content: 'You can only have up to 25 fields.', flags: EPHEMERAL });
       }
 
       const modal = new ModalBuilder()
@@ -301,7 +302,7 @@ const buttons = [
         state.embed.fields.pop();
         await updatePreview(interaction);
       } else {
-        await interaction.reply({ content: 'No fields to remove.', ephemeral: true });
+        await interaction.reply({ content: 'No fields to remove.', flags: EPHEMERAL });
       }
     }
   },
@@ -362,7 +363,7 @@ const buttons = [
 
         const result = await manager.sendToTarget(userId);
         if (!result.success) {
-          await interaction.followUp({ content: result.error, ephemeral: true });
+          await interaction.followUp({ content: result.error, flags: EPHEMERAL });
           await manager.refresh(userId);
           return;
         }
@@ -376,7 +377,7 @@ const buttons = [
       const targetChannel = interaction.client.channels.cache.get(state.targetChannelId);
 
       if (!targetChannel) {
-        return interaction.reply({ content: 'Could not find the target channel. It might have been deleted.', ephemeral: true });
+        return interaction.reply({ content: 'Could not find the target channel. It might have been deleted.', flags: EPHEMERAL });
       }
 
       const message = manager.buildMessage(userId);
@@ -392,7 +393,7 @@ const buttons = [
         });
       } catch (error) {
         logger.error(`Error sending message to channel ${state.targetChannelId}:`, error);
-        await interaction.reply({ content: 'Failed to send message to the channel. Make sure I have permission to send messages there.', ephemeral: true });
+        await interaction.reply({ content: 'Failed to send message to the channel. Make sure I have permission to send messages there.', flags: EPHEMERAL });
       }
     }
   },
