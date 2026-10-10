@@ -32,7 +32,8 @@ export class ComponentBuilder {
     };
 
     if (description) container.description = description;
-    if (accentColor) container.accent_color = accentColor;
+    // 0 (#000000) is a valid accent colour; only null/undefined means "no accent"
+    if (accentColor !== null && accentColor !== undefined) container.accent_color = accentColor;
     if (spoiler) container.spoiler = true;
     if (id !== null) container.id = id;
 
@@ -114,17 +115,43 @@ export class ComponentBuilder {
   static createButton({ customId, label, style, emoji, url, disabled, id = null }) {
     const button = {
       type: ComponentType.Button,
-      style: style,
-      label: label,
-      disabled: disabled,
+      // Discord requires link buttons (url) to use style 5 (Link)
+      style: url ? 5 : (style || 1),
     };
 
-    if (customId) button.custom_id = customId;
+    if (label) button.label = label;
+    if (disabled) button.disabled = true;
+    if (url) {
+      button.url = url;
+    } else if (customId) {
+      button.custom_id = customId;
+    }
     if (emoji) button.emoji = emoji;
-    if (url) button.url = url;
     if (id !== null) button.id = id;
 
     return button;
+  }
+
+  static createStringSelect({ customId, placeholder, options = [], minValues, maxValues, disabled, id = null }) {
+    const select = {
+      type: ComponentType.StringSelect,
+      custom_id: customId,
+      options: options.map(opt => {
+        const o = { label: opt.label, value: opt.value };
+        if (opt.description) o.description = opt.description;
+        if (opt.emoji) o.emoji = opt.emoji;
+        if (opt.default) o.default = true;
+        return o;
+      }),
+    };
+
+    if (placeholder) select.placeholder = placeholder;
+    if (minValues !== undefined) select.min_values = minValues;
+    if (maxValues !== undefined) select.max_values = maxValues;
+    if (disabled) select.disabled = true;
+    if (id !== null) select.id = id;
+
+    return select;
   }
 
   static createThumbnail({ src, description = null, spoiler = false, size = null, id = null }) {
@@ -186,7 +213,7 @@ export class ComponentBuilder {
           containerComponents.push(this.createTextDisplay(text, getNextId()));
           if (separatorIndices && separatorIndices.includes(index)) {
             const sep = Array.isArray(separator) ? separator.find(s => (typeof s === 'object' && s.index === index) || (typeof s === 'number' && s === index)) : null;
-            containerComponents.push(this.createSeparator(sep ? { spacing: sep.spacing, divider: sep.divider } : {}, getNextId()));
+            containerComponents.push(this.createSeparator({ ...(sep ? { spacing: sep.spacing, divider: sep.divider } : {}), id: getNextId() }));
           }
         }
       });
@@ -199,7 +226,7 @@ export class ComponentBuilder {
     const hasTitle = titleTextDisplay || markdownContent || (textDisplays.length > 0 && (separatorIndices === null || !separatorIndices.includes(textDisplays.length - 1)));
     const hasContent = description || components.length > 0 || buttons.length > 0 || sections.length > 0 || mediaGallery.length > 0 || files.length > 0;
     if (isSeparatorEnabled || (separatorIndices === null && hasTitle && hasContent)) {
-      containerComponents.push(this.createSeparator({}, getNextId()));
+      containerComponents.push(this.createSeparator({ id: getNextId() }));
     }
 
     if (description) {

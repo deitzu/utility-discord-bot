@@ -1,8 +1,50 @@
-import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
+import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, AttachmentBuilder } from 'discord.js';
 import { createLogger } from '../utils/Logger.js';
+import { getMessageStyle } from '../utils/ConfigLoader.js';
+import { exportModel, LIMITS } from '../utils/EmbedV2Model.js';
+import { buildColorModal, buildImportModal, buildItemModal, buildTitleModal, kindOfItem } from '../utils/EmbedV2Modals.js';
 
 const logger = createLogger('EmbedCreatorButtons');
 
+const SESSION_EXPIRED = 'This session has expired (the bot may have restarted). Run `/embed` again to start a new one.';
+
+function isV2(interaction) {
+  return getMessageStyle(interaction.client.embedCreatorManager.config, 'embedCreator') === 'v2';
+}
+
+async function safeReply(interaction, content) {
+  const payload = { content, ephemeral: true };
+  if (interaction.replied || interaction.deferred) return interaction.followUp(payload);
+  return interaction.reply(payload);
+}
+
+/** Returns the running V2 session, or tells the user it expired and returns null. */
+async function requireSession(interaction) {
+  const session = interaction.client.embedCreatorManager.getSession(interaction.user.id);
+  if (!session) {
+    await safeReply(interaction, SESSION_EXPIRED);
+    return null;
+  }
+  return session;
+}
+
+/** Acknowledges the click and re-renders the preview + controls DM messages. */
+async function refresh(interaction) {
+  await interaction.deferUpdate();
+  await interaction.client.embedCreatorManager.refresh(interaction.user.id);
+}
+
+/** Returns the selected item index, or null (after telling the user) when nothing is selected. */
+async function requireSelection(interaction, session) {
+  const index = session.v2.selected;
+  if (index === null || index === undefined || !session.v2.items[index]) {
+    await safeReply(interaction, 'Select an item in the second menu first.');
+    return null;
+  }
+  return index;
+}
+
+// Legacy (classic embed) helper
 async function updatePreview(interaction) {
   const userId = interaction.user.id;
   const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
@@ -14,6 +56,119 @@ async function updatePreview(interaction) {
 }
 
 const buttons = [
+  /* ---------------------------------------------------------------- */
+  /* Components V2                                                     */
+  /* ---------------------------------------------------------------- */
+  {
+    customId: 'embed_creator_v2_title',
+    async execute(interaction) {
+      const session = await requireSession(interaction);
+      if (!session) return;
+      await interaction.showModal(buildTitleModal(session.v2.title));
+    }
+  },
+  {
+    customId: 'embed_creator_v2_color',
+    async execute(interaction) {
+      const session = await requireSession(interaction);
+      if (!session) return;
+      await interaction.showModal(buildColorModal(session.embed.color));
+    }
+  },
+  {
+    customId: 'embed_creator_v2_spoiler',
+    async execute(interaction) {
+      if (!(await requireSession(interaction))) return;
+      interaction.client.embedCreatorManager.toggleSpoiler(interaction.user.id);
+      await refresh(interaction);
+    }
+  },
+  {
+    customId: 'embed_creator_v2_export',
+    async execute(interaction) {
+      const session = await requireSession(interaction);
+      if (!session) return;
+
+      const manager = interaction.client.embedCreatorManager;
+      const json = JSON.stringify(exportModel(manager.getModel(interaction.user.id)));
+      const file = new AttachmentBuilder(Buffer.from(json, 'utf-8'), { name: 'embed-v2.json' });
+      const note = json.length > LIMITS.totalText
+        ? `This JSON is ${json.length} characters, which is over the ${LIMITS.totalText}-character limit of the Import form, so it can only be kept as a backup.`
+        : 'Paste the contents into **Import JSON** to load it again.';
+
+      await interaction.reply({ content: `Your message as JSON. ${note}`, files: [file], ephemeral: true });
+    }
+  },
+  {
+    customId: 'embed_creator_v2_import',
+    async execute(interaction) {
+      if (!(await requireSession(interaction))) return;
+      await interaction.showModal(buildImportModal());
+    }
+  },
+  {
+    customId: 'embed_creator_item_edit',
+    async execute(interaction) {
+      const session = await requireSession(interaction);
+      if (!session) return;
+      const index = await requireSelection(interaction, session);
+      if (index === null) return;
+
+      const item = session.v2.items[index];
+      session.v2.pendingEdit = index;
+      await interaction.showModal(buildItemModal(kindOfItem(item), item));
+    }
+  },
+  {
+    customId: 'embed_creator_item_up',
+    async execute(interaction) {
+      const session = await requireSession(interaction);
+      if (!session) return;
+      const index = await requireSelection(interaction, session);
+      if (index === null) return;
+      interaction.client.embedCreatorManager.moveItem(interaction.user.id, index, -1);
+      await refresh(interaction);
+    }
+  },
+  {
+    customId: 'embed_creator_item_down',
+    async execute(interaction) {
+      const session = await requireSession(interaction);
+      if (!session) return;
+      const index = await requireSelection(interaction, session);
+      if (index === null) return;
+      interaction.client.embedCreatorManager.moveItem(interaction.user.id, index, 1);
+      await refresh(interaction);
+    }
+  },
+  {
+    customId: 'embed_creator_item_dup',
+    async execute(interaction) {
+      const session = await requireSession(interaction);
+      if (!session) return;
+      const index = await requireSelection(interaction, session);
+      if (index === null) return;
+      if (interaction.client.embedCreatorManager.duplicateItem(interaction.user.id, index) === -1) {
+        return safeReply(interaction, `You can have at most ${LIMITS.maxItems} items.`);
+      }
+      await refresh(interaction);
+    }
+  },
+  {
+    customId: 'embed_creator_item_delete',
+    async execute(interaction) {
+      const session = await requireSession(interaction);
+      if (!session) return;
+      const index = await requireSelection(interaction, session);
+      if (index === null) return;
+      interaction.client.embedCreatorManager.removeItem(interaction.user.id, index);
+      await refresh(interaction);
+    }
+  },
+
+  /* ---------------------------------------------------------------- */
+  /* Classic embed mode (legacy)                                       */
+  /* ---------------------------------------------------------------- */
   {
     customId: 'embed_creator_title',
     async execute(interaction) {
@@ -66,7 +221,7 @@ const buttons = [
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
         .setPlaceholder('#0099ff')
-        .setValue(state.embed.color || '');
+        .setValue(typeof state.embed.color === 'string' ? state.embed.color : '');
 
       modal.addComponents(new ActionRowBuilder().addComponents(input));
       await interaction.showModal(modal);
@@ -97,381 +252,6 @@ const buttons = [
       const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
       state.embed.timestamp = !state.embed.timestamp;
       await updatePreview(interaction);
-    }
-  },
-  {
-    customId: 'embed_creator_textdisplay_add',
-    async execute(interaction) {
-      const modal = new ModalBuilder()
-        .setCustomId('embed_creator_modal_textdisplay')
-        .setTitle('Add Text Display');
-
-      const input = new TextInputBuilder()
-        .setCustomId('text_input')
-        .setLabel('Content')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(true)
-        .setPlaceholder('Enter markdown content...');
-
-      modal.addComponents(new ActionRowBuilder().addComponents(input));
-      await interaction.showModal(modal);
-    }
-  },
-  {
-    customId: 'embed_creator_textdisplay_remove',
-    async execute(interaction) {
-      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
-      if (state.v2.textDisplays.length > 0) {
-        interaction.client.embedCreatorManager.removeTextDisplay(interaction.user.id);
-        await updatePreview(interaction);
-      } else {
-        await interaction.reply({ content: 'No text displays to remove.', ephemeral: true });
-      }
-    }
-  },
-  {
-    customId: 'embed_creator_separator_add',
-    async execute(interaction) {
-      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
-      if (state.v2.textDisplays.length === 0) {
-        return interaction.reply({ content: 'Add some text displays first before adding separators.', ephemeral: true });
-      }
-
-      const modal = new ModalBuilder()
-        .setCustomId('embed_creator_modal_separator')
-        .setTitle('Add Separator');
-
-      const input = new TextInputBuilder()
-        .setCustomId('index_input')
-        .setLabel(`After Text Index (0 to ${state.v2.textDisplays.length - 1})`)
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-        .setPlaceholder('Enter the index number...');
-
-      const spacingInput = new TextInputBuilder()
-        .setCustomId('separator_spacing')
-        .setLabel('Spacing (1=Small, 2=Large)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('1');
-
-      const dividerInput = new TextInputBuilder()
-        .setCustomId('separator_divider')
-        .setLabel('Show Divider Line? (true/false)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('true');
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(input),
-        new ActionRowBuilder().addComponents(spacingInput),
-        new ActionRowBuilder().addComponents(dividerInput)
-      );
-      await interaction.showModal(modal);
-    }
-  },
-  {
-    customId: 'embed_creator_markdown_line',
-    async execute(interaction) {
-      interaction.client.embedCreatorManager.toggleMarkdownLine(interaction.user.id);
-      await updatePreview(interaction);
-    }
-  },
-  {
-    customId: 'embed_creator_button_add',
-    async execute(interaction) {
-      const modal = new ModalBuilder()
-        .setCustomId('embed_creator_modal_button')
-        .setTitle('Add Button');
-
-      const labelInput = new TextInputBuilder()
-        .setCustomId('button_label')
-        .setLabel('Button Label')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-      const idInput = new TextInputBuilder()
-        .setCustomId('button_id')
-        .setLabel('Button Custom ID (Optional)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('my_custom_id');
-
-      const urlInput = new TextInputBuilder()
-        .setCustomId('button_url')
-        .setLabel('Button URL (Optional, for Link buttons)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('https://example.com');
-
-      const styleInput = new TextInputBuilder()
-        .setCustomId('button_style')
-        .setLabel('Style 1-5: P/S/S/D/Link')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('1');
-
-      const emojiInput = new TextInputBuilder()
-        .setCustomId('button_emoji')
-        .setLabel('Emoji (Optional, name:id:animated or 🎉)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('🎉 or name:id:animated');
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(labelInput),
-        new ActionRowBuilder().addComponents(idInput),
-        new ActionRowBuilder().addComponents(urlInput),
-        new ActionRowBuilder().addComponents(styleInput),
-        new ActionRowBuilder().addComponents(emojiInput)
-      );
-      await interaction.showModal(modal);
-    }
-  },
-  {
-    customId: 'embed_creator_section_add',
-    async execute(interaction) {
-      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
-      if (state.v2.textDisplays.length === 0) {
-        return interaction.reply({ content: 'Add some text displays first before adding sections.', ephemeral: true });
-      }
-
-      const modal = new ModalBuilder()
-        .setCustomId('embed_creator_modal_section')
-        .setTitle('Add Section');
-
-      const text1Input = new TextInputBuilder()
-        .setCustomId('section_text1')
-        .setLabel('Text Display 1 (Required)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(true)
-        .setPlaceholder('First text display content...');
-
-      const text2Input = new TextInputBuilder()
-        .setCustomId('section_text2')
-        .setLabel('Text Display 2 (Optional)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(false)
-        .setPlaceholder('Second text display content...');
-
-      const text3Input = new TextInputBuilder()
-        .setCustomId('section_text3')
-        .setLabel('Text Display 3 (Optional)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(false)
-        .setPlaceholder('Third text display content...');
-
-      const accessoryInput = new TextInputBuilder()
-        .setCustomId('section_accessory')
-        .setLabel('Accessory Type (button / thumbnail / none)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('button');
-
-      const accessoryLabelInput = new TextInputBuilder()
-        .setCustomId('section_accessory_label')
-        .setLabel('Accessory Label (for button)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('Click me');
-
-      const accessoryUrlInput = new TextInputBuilder()
-        .setCustomId('section_accessory_url')
-        .setLabel('Accessory URL (for link button)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('https://example.com');
-
-      const accessoryStyleInput = new TextInputBuilder()
-        .setCustomId('section_accessory_style')
-        .setLabel('Accessory Style (1-5, for button)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('1');
-
-      const accessoryEmojiInput = new TextInputBuilder()
-        .setCustomId('section_accessory_emoji')
-        .setLabel('Accessory Emoji (name:id:animated or 🎉)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('🎉');
-
-      const thumbnailUrlInput = new TextInputBuilder()
-        .setCustomId('section_thumbnail_url')
-        .setLabel('Thumbnail URL (for thumbnail accessory)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('https://example.com/image.png');
-
-      const thumbnailDescInput = new TextInputBuilder()
-        .setCustomId('section_thumbnail_desc')
-        .setLabel('Thumbnail Description (Optional)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('Alt text');
-
-      const thumbnailSizeInput = new TextInputBuilder()
-        .setCustomId('section_thumbnail_size')
-        .setLabel('Size: 40/64/80/100/128/256/512')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('64');
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(text1Input, text2Input),
-        new ActionRowBuilder().addComponents(text3Input, accessoryInput),
-        new ActionRowBuilder().addComponents(accessoryLabelInput, accessoryUrlInput, accessoryStyleInput),
-        new ActionRowBuilder().addComponents(accessoryEmojiInput, thumbnailUrlInput),
-        new ActionRowBuilder().addComponents(thumbnailDescInput, thumbnailSizeInput)
-      );
-      await interaction.showModal(modal);
-    }
-  },
-  {
-    customId: 'embed_creator_section_remove',
-    async execute(interaction) {
-      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
-      if (state.v2.sections.length > 0) {
-        interaction.client.embedCreatorManager.removeSection(interaction.user.id);
-        await updatePreview(interaction);
-      } else {
-        await interaction.reply({ content: 'No sections to remove.', ephemeral: true });
-      }
-    }
-  },
-  {
-    customId: 'embed_creator_gallery_add',
-    async execute(interaction) {
-      const modal = new ModalBuilder()
-        .setCustomId('embed_creator_modal_gallery')
-        .setTitle('Add Media Gallery (3 images max)');
-
-      // Image 1: URL + Description + Spoiler
-      const url1Input = new TextInputBuilder()
-        .setCustomId('gallery_url1')
-        .setLabel('Image 1 URL (Required)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-        .setPlaceholder('https://example.com/image1.png');
-
-      const desc1Input = new TextInputBuilder()
-        .setCustomId('gallery_desc1')
-        .setLabel('Description 1 (Optional)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('Alt text for image 1');
-
-      const spoiler1Input = new TextInputBuilder()
-        .setCustomId('gallery_spoiler1')
-        .setLabel('Spoiler 1? (true/false)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('false');
-
-      // Image 2: URL + Description + Spoiler
-      const url2Input = new TextInputBuilder()
-        .setCustomId('gallery_url2')
-        .setLabel('Image 2 URL (Optional)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('https://example.com/image2.png');
-
-      const desc2Input = new TextInputBuilder()
-        .setCustomId('gallery_desc2')
-        .setLabel('Description 2 (Optional)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('Alt text for image 2');
-
-      const spoiler2Input = new TextInputBuilder()
-        .setCustomId('gallery_spoiler2')
-        .setLabel('Spoiler 2? (true/false)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('false');
-
-      // Image 3: URL + Description + Spoiler
-      const url3Input = new TextInputBuilder()
-        .setCustomId('gallery_url3')
-        .setLabel('Image 3 URL (Optional)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('https://example.com/image3.png');
-
-      const desc3Input = new TextInputBuilder()
-        .setCustomId('gallery_desc3')
-        .setLabel('Description 3 (Optional)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('Alt text for image 3');
-
-      const spoiler3Input = new TextInputBuilder()
-        .setCustomId('gallery_spoiler3')
-        .setLabel('Spoiler 3? (true/false)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('false');
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(url1Input, desc1Input),
-        new ActionRowBuilder().addComponents(spoiler1Input),
-        new ActionRowBuilder().addComponents(url2Input, desc2Input),
-        new ActionRowBuilder().addComponents(spoiler2Input),
-        new ActionRowBuilder().addComponents(url3Input, desc3Input, spoiler3Input)
-      );
-      await interaction.showModal(modal);
-    }
-  },
-  {
-    customId: 'embed_creator_gallery_remove',
-    async execute(interaction) {
-      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
-      if (state.v2.mediaGallery.length > 0) {
-        interaction.client.embedCreatorManager.removeMediaGallery(interaction.user.id);
-        await updatePreview(interaction);
-      } else {
-        await interaction.reply({ content: 'No media galleries to remove.', ephemeral: true });
-      }
-    }
-  },
-  {
-    customId: 'embed_creator_file_add',
-    async execute(interaction) {
-      const modal = new ModalBuilder()
-        .setCustomId('embed_creator_modal_file')
-        .setTitle('Add File');
-
-      const urlInput = new TextInputBuilder()
-        .setCustomId('file_url')
-        .setLabel('File URL (attachment:// or https://)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-        .setPlaceholder('attachment://file.pdf or https://example.com/file.pdf');
-
-      const spoilerInput = new TextInputBuilder()
-        .setCustomId('file_spoiler')
-        .setLabel('Spoiler? (true/false)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('false');
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(urlInput),
-        new ActionRowBuilder().addComponents(spoilerInput)
-      );
-      await interaction.showModal(modal);
-    }
-  },
-  {
-    customId: 'embed_creator_file_remove',
-    async execute(interaction) {
-      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
-      if (state.v2.files.length > 0) {
-        interaction.client.embedCreatorManager.removeFile(interaction.user.id);
-        await updatePreview(interaction);
-      } else {
-        await interaction.reply({ content: 'No files to remove.', ephemeral: true });
-      }
     }
   },
   {
@@ -563,23 +343,48 @@ const buttons = [
       await interaction.showModal(modal);
     }
   },
+
+  /* ---------------------------------------------------------------- */
+  /* Shared by both modes: Send / Reset / Cancel                       */
+  /* ---------------------------------------------------------------- */
   {
     customId: 'embed_creator_send',
     async execute(interaction) {
       const userId = interaction.user.id;
-      const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
+      const manager = interaction.client.embedCreatorManager;
+
+      if (isV2(interaction)) {
+        const session = await requireSession(interaction);
+        if (!session) return;
+
+        const targetChannelId = session.targetChannelId;
+        await interaction.deferUpdate();
+
+        const result = await manager.sendToTarget(userId);
+        if (!result.success) {
+          await interaction.followUp({ content: result.error, ephemeral: true });
+          await manager.refresh(userId);
+          return;
+        }
+
+        await manager.finishSession(userId, `✅ Message sent to <#${targetChannelId}>.`);
+        return;
+      }
+
+      // Classic embed mode
+      const state = manager.getOrCreateState(userId);
       const targetChannel = interaction.client.channels.cache.get(state.targetChannelId);
 
       if (!targetChannel) {
         return interaction.reply({ content: 'Could not find the target channel. It might have been deleted.', ephemeral: true });
       }
 
-      const message = interaction.client.embedCreatorManager.buildMessage(userId);
-      
+      const message = manager.buildMessage(userId);
+
       try {
         await targetChannel.send(message);
-        await interaction.client.embedCreatorManager.deletePreviewAndControls(userId, interaction.user);
-        interaction.client.embedCreatorManager.clearState(userId);
+        await manager.deletePreviewAndControls(userId, interaction.user);
+        manager.clearState(userId);
         await interaction.update({
           content: `✅ Message successfully sent to ${targetChannel}!`,
           embeds: [],
@@ -592,41 +397,32 @@ const buttons = [
     }
   },
   {
-    customId: 'embed_creator_preview',
-    async execute(interaction) {
-      await interaction.deferUpdate();
-      const userId = interaction.user.id;
-      const finalMessage = interaction.client.embedCreatorManager.buildFinalMessage(userId);
-      if (!finalMessage) {
-        return interaction.followUp({ content: 'Failed to build preview message.', ephemeral: true });
-      }
-      try {
-        await interaction.user.send(finalMessage);
-        await interaction.followUp({ content: '✅ Preview sent to your DM!', ephemeral: true });
-      } catch (error) {
-        logger.error('Failed to send preview DM:', error);
-        await interaction.followUp({ content: 'Failed to send preview. Make sure your DMs are open.', ephemeral: true });
-      }
-    }
-  },
-  {
     customId: 'embed_creator_reset',
     async execute(interaction) {
       const userId = interaction.user.id;
+      const manager = interaction.client.embedCreatorManager;
       logger.info('Reset button clicked', { userId, interactionId: interaction.id });
+
       try {
+        if (isV2(interaction)) {
+          if (!(await requireSession(interaction))) return;
+          manager.resetState(userId);
+          await refresh(interaction);
+          return;
+        }
+
         await interaction.deferUpdate();
-        interaction.client.embedCreatorManager.resetState(userId);
-        const state = interaction.client.embedCreatorManager.getOrCreateState(userId);
+        manager.resetState(userId);
+        const state = manager.getOrCreateState(userId);
         const targetChannel = interaction.client.channels.cache.get(state.targetChannelId);
 
-        await interaction.client.embedCreatorManager.updatePreview(userId);
-        await interaction.client.embedCreatorManager.updateControls(userId, targetChannel || 'unknown channel');
-        
+        await manager.updatePreview(userId);
+        await manager.updateControls(userId, targetChannel || 'unknown channel');
+
         await interaction.editReply({ content: '✅ Preview has been reset to default.', components: [] });
         logger.info('Reset completed successfully', { userId, interactionId: interaction.id });
       } catch (error) {
-        logger.error('Reset failed', { userId: interaction.user.id, interactionId: interaction.id, error: error.stack });
+        logger.error('Reset failed', { userId, interactionId: interaction.id, error: error.stack });
       }
     }
   },
@@ -634,16 +430,25 @@ const buttons = [
     customId: 'embed_creator_cancel',
     async execute(interaction) {
       const userId = interaction.user.id;
+      const manager = interaction.client.embedCreatorManager;
       logger.info('Cancel button clicked', { userId, interactionId: interaction.id });
+
       try {
+        if (isV2(interaction)) {
+          if (!(await requireSession(interaction))) return;
+          await interaction.deferUpdate();
+          await manager.finishSession(userId, '❌ Embed creation cancelled.');
+          return;
+        }
+
         await interaction.deferUpdate();
-        interaction.client.embedCreatorManager.clearState(userId);
-        await interaction.client.embedCreatorManager.deletePreviewAndControls(userId, interaction.user);
-        
+        manager.clearState(userId);
+        await manager.deletePreviewAndControls(userId, interaction.user);
+
         await interaction.editReply({ content: '❌ Embed creation cancelled.', components: [] });
         logger.info('Cancel completed successfully', { userId, interactionId: interaction.id });
       } catch (error) {
-        logger.error('Cancel failed', { userId: interaction.user.id, interactionId: interaction.id, error: error.stack });
+        logger.error('Cancel failed', { userId, interactionId: interaction.id, error: error.stack });
       }
     }
   }

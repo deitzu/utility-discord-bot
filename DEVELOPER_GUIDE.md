@@ -39,7 +39,7 @@ Features are encapsulated in "Manager" classes. This keeps `index.js` clean and 
 - **VideoNotifierManager**: Polls YouTube and TikTok RSS feeds for new content.
 - **GitHubNotifierManager**: Receives and processes GitHub webhooks.
 - **AutoModerationManager**: Monitors messages for spam, profanity, and invited links.
-- **EmbedCreatorManager**: Handles the creation and editing of custom embeds.
+- **EmbedCreatorManager**: Handles the creation and editing of custom embeds. In V2 mode it keeps an ordered list of components per user (see `utils/EmbedV2Model.js` and the "Embed Creator" section of `DOCS_COMPONENTS_V2.md`).
 
 ### Event-Driven System
 The bot responds to Discord events. The most critical event is `interactionCreate`, which routes interactions to the appropriate command or component handler.
