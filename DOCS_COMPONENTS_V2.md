@@ -253,3 +253,77 @@ await interaction.update(rest);
 - Thumbnail MUST be inside a Section as accessory.
 - Cannot be placed directly in Container or ActionRow.
 - Must use `src` (URL or `attachment://`), not `url` field.
+## String Select (type 3) in messages
+
+`ComponentBuilder.createStringSelect()` builds a dropdown. It must be the only child of its own ActionRow.
+
+```javascript
+ComponentBuilder.createActionRow([
+  ComponentBuilder.createStringSelect({
+    customId: 'my_select',
+    placeholder: 'Choose…',
+    options: [
+      { label: 'Red', value: 'red', description: 'The reds' },
+      { label: 'Blue', value: 'blue' }
+    ]
+  })
+]);
+```
+
+Limits: 1-25 options, unique `value`s, label/value/description max 100 chars, placeholder max 150, `custom_id` max 100.
+Selects are handled in `events/interactionCreate.js` the same way as buttons (looked up in `client.components` by `customId`).
+
+## Embed Creator (`/embed`) in V2 mode
+
+Set `"messageStyle": "v2"` (global) or `"embedCreator": { "messageStyle": "v2" }` in `config.json`, then run `/embed channel:#somewhere`.
+The bot DMs you two messages: a live **preview** and a **controls** panel.
+
+**Controls**
+- **➕ Add a component…** (menu): Text, Separator, Section + button, Section + thumbnail, Media gallery, Button, Select menu.
+- **Item picker** (menu) + **Edit / Up / Down / Copy / Delete**: components are kept in the order you add them, and any one of them can be edited, moved, duplicated or deleted (not just "remove last").
+- **Title** (rendered as `# heading`), **Colour** (hex, empty = none, `#000000` is valid), **Spoiler** (blurs the whole container).
+- **Export JSON / Import JSON**: back up a message or paste one in (import is limited to 4000 characters by Discord's text input).
+- **Send Message** is disabled while the message is invalid. What is sent is built by the same function as the preview.
+
+**Modal input formats** (a Discord modal allows max 5 fields, so list-like data is one entry per line)
+
+| Component | Format |
+|-----------|--------|
+| Section text | up to 3 parts separated by a line containing only `---` |
+| Gallery | one image per line: `https://… \| alt text \| spoiler` (alt text and spoiler optional, max 10) |
+| Select options | one per line: `label \| value \| description` (value defaults to a slug of the label) |
+| Button target | `https://…` makes a link button; anything else is a custom ID; empty = auto ID |
+| Button emoji | `🎉`, `name:id`, `name:id:true` (animated) or `<:name:id>` / `<a:name:id>` |
+
+**Validation** (shown live in the controls panel, counted from the real payload): max 40 components (container, action rows and accessories count), max 4000 characters of text across all text displays, unique custom IDs, valid http(s) URLs, 1-3 texts per section, 1-10 gallery images, 1-25 select options.
+
+**Interactive buttons/selects** created here have no behaviour unless a handler with the same custom ID is registered in `client.components`; the panel warns about this. Link buttons always work.
+
+**JSON format**
+
+```json
+{
+  "version": 1,
+  "title": "Release",
+  "color": "#57f287",
+  "spoiler": false,
+  "items": [
+    { "type": "text", "content": "Version **2.0** is out" },
+    { "type": "separator", "spacing": 1, "divider": true },
+    { "type": "section", "texts": ["Changelog"], "accessory": { "type": "button", "label": "Open", "url": "https://example.com" } },
+    { "type": "section", "texts": ["With image"], "accessory": { "type": "thumbnail", "url": "https://example.com/a.png", "description": "alt" } },
+    { "type": "gallery", "items": [{ "url": "https://example.com/a.png", "description": "alt", "spoiler": false }] },
+    { "type": "button", "label": "Visit", "style": 5, "url": "https://example.com" },
+    { "type": "select", "placeholder": "Pick", "options": [{ "label": "Red", "value": "red" }] }
+  ]
+}
+```
+
+Consecutive `button` items share an ActionRow (5 per row). A section always needs an accessory.
+
+**Code layout**: `utils/EmbedV2Model.js` (pure data model, builder, validator, JSON; no Discord dependency), `utils/EmbedV2Modals.js` (modal definitions and parsers), `utils/EmbedCreatorManager.js` (session state and Discord I/O), `components/EmbedCreator{Buttons,Modal,Select}.js` (handlers).
+
+### Troubleshooting additions
+
+- **"This session has expired"**: sessions live in memory, so a bot restart ends them. Run `/embed` again.
+- **Messages with V2 components cannot be edited with `content`/`embeds`**: the creator never does this; it edits the controls message into a V2 status line when you send or cancel.

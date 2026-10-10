@@ -36,6 +36,16 @@ const client = new Client({
 
 client.commands = new Collection();
 
+// discord.js re-emits errors thrown inside async event handlers as an 'error' event.
+// Without a listener Node throws and the whole bot exits (e.g. on "Unknown interaction"
+// when a reply arrives after Discord's 3 second window), so log them instead.
+client.on('error', error => {
+  logger.error('Discord client error:', error);
+});
+process.on('unhandledRejection', reason => {
+  logger.error('Unhandled promise rejection:', reason);
+});
+
 const tempChannelManager = new TempChannelManager(client, config);
 const ticketManager = new TicketManager(client, config);
 const videoNotifierManager = new VideoNotifierManager(client, config, configPath);
