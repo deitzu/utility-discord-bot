@@ -1,4 +1,5 @@
 import { createLogger } from '../utils/Logger.js';
+import { safeRespond } from '../utils/InteractionSafe.js';
 
 const logger = createLogger('InteractionEvent');
 
@@ -17,16 +18,10 @@ export default {
       } catch (error) {
         logger.error(`Error executing ${interaction.commandName}:`, error);
         
-        const errorMessage = {
+        await safeRespond(interaction, {
           content: 'There was an error while executing this command!',
           ephemeral: true
-        };
-        
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(errorMessage);
-        } else {
-          await interaction.reply(errorMessage);
-        }
+        });
       }
     }
     
@@ -38,10 +33,10 @@ export default {
         // Buttons/selects created in the Embed Creator get auto IDs starting with "v2_".
         // Answer them instead of letting Discord show "This interaction failed".
         if (interaction.customId.startsWith('v2_')) {
-          await interaction.reply({
+          await safeRespond(interaction, {
             content: `This ${kind} doesn't have an action yet. Link buttons open a URL; interactive ones need a handler registered for their custom ID.`,
             ephemeral: true
-          }).catch(() => {});
+          });
         }
         return;
       }
@@ -50,13 +45,7 @@ export default {
         await component.execute(interaction);
       } catch (error) {
         logger.error(`Error executing ${kind} ${interaction.customId}:`, error);
-        const replyOptions = { content: 'There was an error handling this interaction!', ephemeral: true };
-
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(replyOptions);
-        } else {
-          await interaction.reply(replyOptions);
-        }
+        await safeRespond(interaction, { content: 'There was an error handling this interaction!', ephemeral: true });
       }
     }
     
@@ -71,13 +60,7 @@ export default {
         await component.execute(interaction);
       } catch (error) {
         logger.error(`Error executing modal ${interaction.customId}:`, error);
-        const replyOptions = { content: 'There was an error handling this interaction!', ephemeral: true };
-        
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(replyOptions);
-        } else {
-          await interaction.reply(replyOptions);
-        }
+        await safeRespond(interaction, { content: 'There was an error handling this interaction!', ephemeral: true });
       }
     }
     
